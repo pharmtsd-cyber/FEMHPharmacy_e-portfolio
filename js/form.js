@@ -1,6 +1,9 @@
 async function openForm(templateId) {
   currentTemplateId = templateId; 
-  if (!currentRecordId) currentSavedAnswers = {}; 
+  if (!currentRecordId) {
+    currentSavedAnswers = {}; 
+    currentAttemptCount = 0; // 新表單時重置次數
+  }
   
   if (timerRaf['ass']) cancelAnimationFrame(timerRaf['ass']); 
   timerStates['ass'] = { isRunning: false, start: null, elapsed: 0 }; 
@@ -30,9 +33,7 @@ function renderForm(response) {
   const data = response.data; 
   document.getElementById('form-title').innerText = data.title;
   
-  // 🌟 判斷是否為 EPA 表單
   const isEPA = data.title.toUpperCase().includes('EPA');
-  
   const userRolesStr = [currentUser.role, currentUser.specialRole].filter(Boolean).join(' ');
   const isStudentUser = userRolesStr.includes('學生') || userRolesStr.includes('實習生');
   const needsAssLock = !isStudentUser && timerStates.ass.elapsed === 0 && !timerStates.ass.isRunning;
@@ -42,22 +43,37 @@ function renderForm(response) {
   const savedAssessmentDate = currentSavedAnswers['assessment_date'] || defaultTodayStr;
 
   let html = `<p style="color: #666; margin-bottom: 20px;">${data.description}</p><form id="dynamic-exam-form">`;
-  html += `<div id="ass-lock-msg" class="question-block" style="background:#fff3cd; color:#856404; display:${needsAssLock ? 'block' : 'none'};">⚠️ 請先點選「▶ 評核開始」以解鎖表單</div>`;
+  html += `<div id="ass-lock-msg" class="question-block" style="background:#fff3cd; color:#856404; display:${needsAssLock ? 'block' : 'none'};">⚠️ 請先填寫「受評學員」與「身分」後，點選「▶ 評核開始」解鎖表單</div>`;
 
   const disableBasicInfo = isStudentUser ? 'disabled="true"' : '';
   
+  // 🌟 補回：學員身分下拉選單，與即時顯示評估次數 (onchange)
   html += `
   <div style="display:flex; gap:15px; flex-wrap:wrap; margin-bottom: 20px;">
     <div class="question-block" style="flex:1; border-left: 5px solid var(--primary-color); padding: 15px; margin-bottom:0;">
       <h3 style="margin-top:0;">📅 評核日期</h3>
       <input type="date" name="assessment_date" value="${savedAssessmentDate}" required ${disableBasicInfo}>
     </div>
+    
     <div class="question-block" style="flex:2; border-left: 5px solid var(--primary-color); padding: 15px; margin-bottom:0;">
       <h3 style="margin-top:0;">👤 受評學員</h3>
-      <input type="text" name="native_student" id="native-student-input" list="native-student-list" value="${currentSavedAnswers['native_student'] || ''}" placeholder="請搜尋..." required ${disableBasicInfo} autocomplete="off">
+      <input type="text" name="native_student" id="native-student-input" list="native-student-list" value="${currentSavedAnswers['native_student'] || ''}" placeholder="請搜尋..." required ${disableBasicInfo} autocomplete="off" onchange="updateAttemptCount()">
       <datalist id="native-student-list">`;
   globalUserList.forEach(u => { html += `<option value="${u.empId} - ${u.name}"></option>`; });
-  html += `</datalist></div></div>`;
+  html += `</datalist>
+      <div id="attempt-count-display" style="margin-top:10px; font-size:14px; color:#e11d48; font-weight:bold;"></div>
+    </div>
+    
+    <div class="question-block" style="flex:1.5; border-left: 5px solid var(--primary-color); padding: 15px; margin-bottom:0;">
+      <h3 style="margin-top:0;">🎓 學員身分</h3>
+      <select name="native_student_role" id="native-student-role" required ${disableBasicInfo}>
+        <option value="">請選擇...</option>
+        <option value="兩年期PGY" ${currentSavedAnswers['native_student_role'] === '兩年期PGY' ? 'selected' : ''}>兩年期PGY</option>
+        <option value="一年期PGY" ${currentSavedAnswers['native_student_role'] === '一年期PGY' ? 'selected' : ''}>一年期PGY</option>
+        <option value="新進藥師" ${currentSavedAnswers['native_student_role'] === '新進藥師' ? 'selected' : ''}>新進藥師</option>
+      </select>
+    </div>
+  </div>`;
 
   html += `
   <div class="floating-timer-panel">
@@ -94,28 +110,25 @@ function renderForm(response) {
     html += `</div>`;
   });
 
-  // 🌟 簽名區塊：依據 EPA 或 DOPS 決定顯示方式
   html += `<div class="question-block"><h3>✍️ 簽名區塊</h3><div style="display:flex; gap:20px; flex-wrap:wrap;">`;
   if (isEPA) {
     if (isStudentUser) {
       const tSigImg = currentSavedAnswers.teacherSignature || '';
-      html += `<div><h4>老師簽名</h4><img src="${tSigImg}" style="max-width:260px; border:1px solid #ccc; background:#f8fafc;" alt="尚未讀取到老師簽名"></div>`;
+      html += `<div><h4>老師簽名</h4><img src="${tSigImg}" style="max-width:260px; border:1px solid #ccc; background:#f8fafc;"></div>`;
       html += `<div><h4>學生簽名</h4><canvas id="student-sig" class="sig-pad" width="260" height="150"></canvas><br><button type="button" class="btn-secondary" style="padding:4px 10px; margin-top:5px;" onclick="clearCanvas('student-sig')">清除重簽</button></div>`;
     } else {
       html += `<div><h4>老師簽名</h4><canvas id="teacher-sig" class="sig-pad" width="260" height="150"></canvas><br><button type="button" class="btn-secondary" style="padding:4px 10px; margin-top:5px;" onclick="clearCanvas('teacher-sig')">清除重簽</button></div>`;
     }
   } else {
-    // DOPS
     html += `<div><h4>老師簽名</h4><canvas id="teacher-sig" class="sig-pad" width="260" height="150"></canvas><br><button type="button" class="btn-secondary" style="padding:4px 10px; margin-top:5px;" onclick="clearCanvas('teacher-sig')">清除重簽</button></div>`;
     html += `<div><h4>學生簽名</h4><canvas id="student-sig" class="sig-pad" width="260" height="150"></canvas><br><button type="button" class="btn-secondary" style="padding:4px 10px; margin-top:5px;" onclick="clearCanvas('student-sig')">清除重簽</button></div>`;
   }
   html += `</div></div>`;
 
-  // 🌟 按鈕區塊：依據 EPA 與身分切換「退回解鎖」按鈕
   if (isEPA && isStudentUser) {
     html += `<div style="display: flex; gap: 15px;">
-              <button type="button" id="btn-return" class="btn-secondary" style="flex:1; background-color:#ff9800; color:white; border:none;" onclick="submitExamHandler('return')">退回給老師修改 (解鎖)</button>
-              <button type="button" id="btn-submit" class="btn-primary" style="flex:2;" onclick="submitExamHandler('submit')">確認無誤，簽名送出</button>
+              <button type="button" id="btn-return" class="btn-secondary" style="flex:1; background-color:#ff9800; color:white; border:none;" onclick="submitExamHandler('return')">退回修改 (解鎖)</button>
+              <button type="button" id="btn-submit" class="btn-primary" style="flex:2;" onclick="submitExamHandler('submit')">確認簽名送出</button>
              </div></form>`;
   } else {
     const draftBtnText = isStudentUser ? "學生存檔(暫存)" : "教師存檔(暫存)";
@@ -128,15 +141,52 @@ function renderForm(response) {
 
   document.getElementById('questions-container').innerHTML = html;
   
-  setTimeout(() => { setupCanvas('teacher-sig'); setupCanvas('student-sig'); }, 100);
-  autoSaveInterval = setInterval(saveLocalDraft, 3000);
+  setTimeout(() => { 
+    setupCanvas('teacher-sig'); 
+    setupCanvas('student-sig'); 
+    updateAttemptCount(); // 🌟 初始化次數顯示
+  }, 100);
   
+  autoSaveInterval = setInterval(saveLocalDraft, 3000);
   if(timerStates['ass'] && timerStates['ass'].elapsed > 0) updateTimerUI('ass'); 
+}
+
+// 🌟 新增：即時顯示目前是該學生的「第幾次評估」
+function updateAttemptCount() {
+  const studentRaw = document.getElementById('native-student-input').value;
+  const display = document.getElementById('attempt-count-display');
+  if (!studentRaw || !currentTemplateId) {
+    display.innerText = ""; return;
+  }
+  
+  const studentId = studentRaw.split('-')[0].trim().toUpperCase();
+  
+  if (currentRecordId && currentAttemptCount > 0) {
+    display.innerText = `📊 本次為第 ${currentAttemptCount} 次評估 (草稿接續)`;
+  } else {
+    const historyCount = globalHistoryCounts[`${studentId}_${currentTemplateId}`] || 0;
+    display.innerText = `📊 系統試算：本次為第 ${historyCount + 1} 次評估`;
+  }
 }
 
 function getStr(sec) { return `${Math.floor(sec / 60)}分${sec % 60}秒`; }
 
 function toggleTimer(type, label) {
+  // 🌟 強制防呆：沒填身分或受評者，不給解鎖計時
+  if (type === 'ass' && !timerStates[type].isRunning) {
+    const studentInput = document.getElementById('native-student-input');
+    const roleInput = document.getElementById('native-student-role');
+    
+    if (studentInput && !studentInput.value.trim()) {
+      alert("⚠️ 請先選擇「受評學員」才能解鎖並開始評核！");
+      return; 
+    }
+    if (roleInput && !roleInput.value.trim()) {
+      alert("⚠️ 請先選擇「學員身分」才能解鎖並開始評核！");
+      return; 
+    }
+  }
+
   if (!timerStates[type].isRunning) {
     timerStates[type].start = Date.now(); 
     timerStates[type].isRunning = true;
@@ -212,7 +262,6 @@ async function submitExamHandler(actionType) {
 
   if (timerStates['ass'] && timerStates['ass'].isRunning) toggleTimer('ass', '評核'); 
 
-  // 🌟 嚴格檢核邏輯
   if (actionType === 'submit') {
     if (!form.reportValidity()) return;
     if (isEPA) {
@@ -260,6 +309,6 @@ async function submitExamHandler(actionType) {
     submitBtn.disabled = false;
     submitBtn.innerText = ogText;
     if(draftBtn) { draftBtn.disabled = false; draftBtn.innerText = isStudentUser ? "學生存檔(暫存)" : "教師存檔(暫存)"; }
-    if(returnBtn) { returnBtn.disabled = false; returnBtn.innerText = "退回給老師修改 (解鎖)"; }
+    if(returnBtn) { returnBtn.disabled = false; returnBtn.innerText = "退回修改 (解鎖)"; }
   }
 }
