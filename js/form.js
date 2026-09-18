@@ -40,11 +40,12 @@ function renderForm(response) {
   const userRolesStr = [currentUser.role, currentUser.specialRole].filter(Boolean).join(' ');
   const isStudentUser = userRolesStr.includes('學生') || userRolesStr.includes('實習生');
   
-  // 🌟 判斷是否為接收方 (被指派回填的人)
   const isReceiver = (currentTaskStatus === '待學生回填' || currentTaskStatus === '待老師回填');
-  // 如果是發起者，才需要檢核有沒有按下評核鎖定
-  const hasExistingTime = currentSavedAnswers['time_assessment'] && currentSavedAnswers['time_assessment'].trim() !== "";
-  const needsAssLock = !isStudentUser && timerStates.ass.elapsed === 0 && !timerStates.ass.isRunning && !hasExistingTime;
+  
+  // 🌟 判斷是否為「學生退回給老師修改」的狀態 (有先前紀錄，且目前身分是老師)
+  const isReturnedToTeacher = (!isStudentUser && currentRecordId && currentSavedAnswers['time_assessment']);
+  
+  const needsAssLock = !isReceiver && !isReturnedToTeacher && timerStates.ass.elapsed === 0 && !timerStates.ass.isRunning;
 
   const todayObj = new Date();
   const defaultTodayStr = new Date(todayObj.getTime() - todayObj.getTimezoneOffset() * 60000).toISOString().split('T')[0];
@@ -52,18 +53,22 @@ function renderForm(response) {
 
   let html = `<p style="color: #666; margin-bottom: 20px;">${data.description}</p><form id="dynamic-exam-form">`;
   
-  // 🌟 學生/接收方的專屬提示
   if (isReceiver) {
     html += `<div style="background:#e0f2fe; border-left:5px solid #0284c7; padding:15px; margin-bottom:20px; border-radius:4px;">
       <h3 style="margin:0 0 10px 0; color:#0369a1;">📄 評核紀錄檢視</h3>
       <p style="margin:0; font-size:14px; color:#0c4a6e;">此為對方填寫完畢之紀錄，請檢視內容並完成您專屬的欄位與簽名。</p>
     </div>`;
+  } else if (isReturnedToTeacher) {
+    // 🌟 退回重寫時的提示橫幅
+    html += `<div style="background:#fff3cd; border-left:5px solid #f59e0b; padding:15px; margin-bottom:20px; border-radius:4px;">
+      <h3 style="margin:0 0 5px 0; color:#b45309;">🔄 學生已將表單退回修改</h3>
+      <p style="margin:0; font-size:14px; color:#92400e;">先前計時與評估內容已保留，您可以直接進行修改並重新送出。</p>
+    </div>`;
   } else {
     html += `<div id="ass-lock-msg" class="question-block" style="background:#fff3cd; color:#856404; display:${needsAssLock ? 'block' : 'none'};">⚠️ 請先填寫「受評學員」與「身分」後，點選「▶ 評核開始」解鎖表單</div>`;
   }
 
-  // 接收方不能改基本資料
-  const disableBasicInfo = isReceiver ? 'disabled="true"' : '';
+  const disableBasicInfo = (isReceiver || isReturnedToTeacher) ? 'disabled="true"' : '';
   
   html += `
   <div style="display:flex; gap:15px; flex-wrap:wrap; margin-bottom: 20px;">
@@ -92,17 +97,15 @@ function renderForm(response) {
     </div>
   </div>`;
 
-  // 🌟 計時器區塊 (依據是否為接收方決定隱藏按鈕)
+  // 🌟 調整：如果是被學生退回的表單，直接顯示「已記錄的時間文字」，不需操作計時器按鈕
   html += `<div class="floating-timer-panel"><h3 style="margin-top:0; color: var(--secondary-color);">⏳ 計時控制</h3>`;
   
-  if (isReceiver) {
-    // 接收方只顯示紀錄文字
+  if (isReceiver || isReturnedToTeacher) {
     html += `<div style="margin-bottom:10px; font-size:15px; color:#444;"><strong>評核花費時間：</strong> ${currentSavedAnswers['time_assessment'] || '無紀錄'}</div>`;
     if (!isEPA) {
       html += `<div style="font-size:15px; color:#444;"><strong>雙向回饋時間：</strong> ${currentSavedAnswers['time_feedback'] || '無紀錄'}</div>`;
     }
   } else {
-    // 發起方顯示控制按鈕
     html += `
     <div class="timer-row" style="border-bottom:${isEPA ? 'none' : '1px solid #eee'}; margin-bottom:${isEPA ? '0' : '10px'}; padding-bottom:${isEPA ? '0' : '10px'};">
       <button type="button" id="btn-ass" class="btn-secondary" onclick="toggleTimer('ass', '評核')" style="width:100%;">▶ 評核開始</button>
@@ -110,7 +113,6 @@ function renderForm(response) {
       <input type="hidden" name="time_assessment" id="val_ass" value="${currentSavedAnswers['time_assessment'] || ''}">
     </div>`;
     
-    // DOPS 才顯示雙向回饋按鈕
     if (!isEPA) {
       html += `
       <div class="timer-row" style="border-bottom:none; margin-bottom:0; padding-bottom:0;">
@@ -122,20 +124,17 @@ function renderForm(response) {
   }
   html += `</div>`;
 
-  // 🌟 題目迴圈與權限鎖定
+  // 題目迴圈
   data.questions.forEach(q => {
     if (q.type === 'heading') { html += `<h3>${q.question}</h3>`; return; }
     
-    // 嚴格依照 J 欄 (targetRole) 判斷使用者是否可填寫
     let canEdit = true;
     if (q.targetRole) {
       if (isStudentUser && !q.targetRole.includes('學生')) canEdit = false;
       if (!isStudentUser && !q.targetRole.includes('教師')) canEdit = false;
     }
     
-    // 輸入框的屬性設定
     const inputClass = canEdit ? 'teacher-input' : '';
-    // 如果權限不符、或尚未解鎖，就設定為 disabled
     const disableInput = !canEdit || (needsAssLock && canEdit);
     const reqAttr = (q.required && canEdit && !disableInput) ? 'required' : '';
     const disabledAttr = disableInput ? 'disabled="true"' : ''; 
@@ -157,6 +156,7 @@ function renderForm(response) {
     html += `</div>`;
   });
 
+  // 簽名區塊
   html += `<div class="question-block"><h3>✍️ 簽名區塊</h3><div style="display:flex; gap:20px; flex-wrap:wrap;">`;
   if (isEPA) {
     if (isStudentUser) {
@@ -180,7 +180,6 @@ function renderForm(response) {
   } else {
     const draftBtnText = isStudentUser ? "學生存檔(暫存)" : "教師存檔(暫存)";
     const submitBtnText = isStudentUser ? "通知教師完成(完稿)" : "送出給學生確認";
-    // 接收方隱藏草稿鍵
     const draftBtnHtml = isReceiver ? '' : `<button type="button" id="btn-draft" class="btn-secondary" style="flex:1;" onclick="submitExamHandler('draft')">${draftBtnText}</button>`;
     
     html += `<div style="display: flex; gap: 15px;">
@@ -199,7 +198,6 @@ function renderForm(response) {
   
   autoSaveInterval = setInterval(saveLocalDraft, 3000);
   
-  // 恢復舊有計時器顯示
   if(timerStates['ass'] && timerStates['ass'].elapsed > 0) updateTimerUI('ass'); 
   if(timerStates['fb'] && timerStates['fb'].elapsed > 0) updateTimerUI('fb'); 
 }
