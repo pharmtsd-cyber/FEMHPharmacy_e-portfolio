@@ -1,5 +1,5 @@
 // 將此 URL 替換為您 GAS 重新部署後的 Web App URL
-const GAS_API_URL = "https://script.google.com/macros/s/AKfycb.../exec";
+const GAS_API_URL = "https://script.google.com/macros/s/AKfycbxDB2GJZdwSccL5Fk1KGkObxEfdCIwj8QeQ7R0W7VfKvbsGVSEErxT7h3Q-4Y6hyHeC/exec";
 
 async function callGAS(action, params = {}) {
   try {
