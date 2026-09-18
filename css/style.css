@@ -1,30 +1,53 @@
-/* 基礎變數與重置 (保留原先的色彩) */
-:root { --primary-color: #005A8C; --sidebar-width: 250px; }
+:root { --primary-color: #005A8C; --secondary-color: #009688; --bg-color: #F4F7F6; --card-bg: #FFFFFF; --text-main: #2C3E50; --border-color: #E0E6ED; --sidebar-width: 250px; }
+body { font-family: '微軟正黑體', -apple-system, sans-serif; margin: 0; background-color: var(--bg-color); color: var(--text-main); overflow-x: hidden; }
 
-/* 漢堡按鈕與側邊欄 */
+/* 導覽列與漢堡選單 */
+.navbar { background: var(--primary-color); color: white; padding: 15px 25px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 4px 12px rgba(0,90,140,0.15); position: sticky; top: 0; z-index: 100; }
+.nav-title { font-size: 20px; font-weight: bold; letter-spacing: 1px; }
 .hamburger { background: none; border: none; color: white; font-size: 24px; cursor: pointer; margin-right: 15px; }
-.sidebar {
-  position: fixed; top: 60px; left: -100%; width: var(--sidebar-width); height: calc(100vh - 60px);
-  background: white; box-shadow: 2px 0 10px rgba(0,0,0,0.1);
-  transition: left 0.3s ease; z-index: 99; display: flex; flex-direction: column;
-}
+
+/* 側邊欄 Sidebar */
+.sidebar { position: fixed; top: 60px; left: -100%; width: var(--sidebar-width); height: calc(100vh - 60px); background: white; box-shadow: 2px 0 10px rgba(0,0,0,0.1); transition: left 0.3s ease; z-index: 99; display: flex; flex-direction: column; }
 .sidebar.open { left: 0; }
 .sidebar-content { padding: 20px; display: flex; flex-direction: column; gap: 15px; height: 100%; }
-.nav-btn { text-align: left; padding: 12px; border: none; background: #f4f7f6; border-radius: 8px; cursor: pointer; }
-.nav-btn:hover { background: #e0e6ed; }
+.nav-btn { text-align: left; padding: 15px; border: none; background: transparent; font-size: 16px; font-weight: bold; color: var(--primary-color); border-radius: 8px; cursor: pointer; transition: 0.3s; }
+.nav-btn:hover, .nav-btn.active { background: #f1f5f9; }
+.btn-logout { background: #e11d48; color: white; text-align: center; }
+.btn-logout:hover { background: #be123c; }
 
-/* 📱 雙重渲染邏輯：透過 body 的 class 控制 */
-/* [1] 網頁版 (RWD) */
-body.layout-web .main-container {
-  margin-left: 0; transition: margin-left 0.3s ease; max-width: 1200px;
-}
-body.layout-web.sidebar-open .main-container { margin-left: var(--sidebar-width); }
+/* 主體與版面位移 */
+.main-container { max-width: 850px; margin: 40px auto; padding: 0 20px; transition: margin-left 0.3s ease; }
+body.sidebar-open .main-container { margin-left: calc(var(--sidebar-width) + 20px); }
 
-/* [2] 手機版 (強制大按鈕、單欄位、隱藏浮動計時器改為底部固定) */
+/* 基本元件 */
+.view-section { display: none; animation: fadeIn 0.4s ease-out; }
+.view-section.active { display: block; }
+@keyframes fadeIn { from { opacity: 0; transform: translateY(15px); } to { opacity: 1; transform: translateY(0); } }
+.login-card { background: var(--card-bg); padding: 50px 40px; border-radius: 12px; box-shadow: 0 8px 30px rgba(0,0,0,0.08); text-align: center; max-width: 400px; margin: 60px auto; border-top: 6px solid var(--primary-color); }
+.login-card input { width: 100%; box-sizing: border-box; padding: 14px; margin: 15px 0; border: 2px solid var(--border-color); border-radius: 8px; font-size: 16px; text-align: center; outline: none; transition: 0.3s; }
+.device-toggle { display: flex; justify-content: space-around; margin-bottom: 20px; font-size: 14px; }
+.section-title { color: var(--primary-color); font-size: 22px; border-bottom: 2px solid var(--primary-color); padding-bottom: 10px; margin-bottom: 25px; }
+.theme-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 20px; margin-top: 20px; }
+.theme-card { background: var(--card-bg); border-left: 5px solid var(--secondary-color); padding: 25px 20px; border-radius: 10px; box-shadow: 0 4px 15px rgba(0,0,0,0.04); cursor: pointer; font-size: 18px; font-weight: bold; text-align: center; transition: all 0.3s ease; }
+.template-item { background: white; padding: 20px 25px; margin-bottom: 15px; border-radius: 10px; border: 1px solid var(--border-color); display: flex; justify-content: space-between; align-items: center; cursor: pointer; box-shadow: 0 2px 8px rgba(0,0,0,0.02); }
+.question-block { background: white; margin-bottom: 25px; padding: 25px; border: 1px solid var(--border-color); border-radius: 12px; box-shadow: 0 2px 10px rgba(0,0,0,0.03); }
+.req { color: #e11d48; margin-left: 4px; }
+select, textarea, input[type="text"], input[type="date"], input[type="time"], input[type="datetime-local"] { width: 100%; box-sizing: border-box; padding: 12px 15px; margin-top: 12px; border: 2px solid var(--border-color); border-radius: 8px; font-family: inherit; font-size: 15px; outline: none; background-color: #f8fafc; }
+label { display: flex; align-items: center; margin: 12px 0; cursor: pointer; padding: 10px 15px; border-radius: 8px; border: 1px solid transparent; transition: 0.2s; }
+.btn-primary { background: var(--primary-color); color: white; border: none; padding: 14px 28px; border-radius: 8px; font-size: 16px; font-weight: bold; cursor: pointer; width: 100%; margin-top: 15px; }
+.btn-secondary { background: #f1f5f9; color: #475569; border: 1px solid #cbd5e1; padding: 10px 20px; border-radius: 6px; cursor: pointer; font-weight: bold; }
+.status-badge { font-size: 12px; padding: 4px 10px; border-radius: 20px; font-weight: bold; margin-left: 10px; }
+.status-draft { background: #fff3cd; color: #856404; }
+.status-pending { background: #cce5ff; color: #004085; }
+.sig-pad { border: 2px dashed #cbd5e1; border-radius: 8px; background-color: #ffffff; cursor: crosshair; touch-action: none; width: 100%; max-width: 280px; box-sizing: border-box; }
+
+/* 預設浮動計時器 (網頁版) */
+.floating-timer-panel { position: fixed; top: 50%; right: 20px; transform: translateY(-50%); width: 320px; background: white; border: 2px solid var(--secondary-color); border-radius: 12px; box-shadow: 0 8px 30px rgba(0,0,0,0.15); padding: 20px; z-index: 1000; }
+.timer-row { margin-bottom: 15px; border-bottom: 1px solid #eee; padding-bottom: 10px; }
+
+/* 📱 手機版適配 (透過 JS 切換 body 的 class) */
+body.layout-mobile .main-container { margin-left: auto; margin-right: auto; }
 body.layout-mobile .theme-grid { grid-template-columns: 1fr; }
-body.layout-mobile .floating-timer-panel {
-  position: static; width: 100%; margin-top: 20px; border: none; box-shadow: none;
-}
-body.layout-mobile input, body.layout-mobile select, body.layout-mobile button {
-  font-size: 18px; padding: 15px; /* 更大的點擊範圍 */
-}
+body.layout-mobile .floating-timer-panel { position: static; width: 100%; transform: none; margin-bottom: 20px; box-sizing: border-box; box-shadow: none; border: 2px solid #cbd5e1; }
+body.layout-mobile input, body.layout-mobile select, body.layout-mobile button, body.layout-mobile label { font-size: 18px; padding: 15px; }
+body.layout-mobile .sig-pad { max-width: 100%; }
