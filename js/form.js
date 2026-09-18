@@ -29,7 +29,10 @@ async function openForm(templateId) {
 function renderForm(response) {
   const data = response.data; 
   document.getElementById('form-title').innerText = data.title;
+  
+  // 🌟 判斷是否為 EPA 表單
   const isEPA = data.title.toUpperCase().includes('EPA');
+  
   const userRolesStr = [currentUser.role, currentUser.specialRole].filter(Boolean).join(' ');
   const isStudentUser = userRolesStr.includes('學生') || userRolesStr.includes('實習生');
   const needsAssLock = !isStudentUser && timerStates.ass.elapsed === 0 && !timerStates.ass.isRunning;
@@ -91,21 +94,37 @@ function renderForm(response) {
     html += `</div>`;
   });
 
+  // 🌟 簽名區塊：依據 EPA 或 DOPS 決定顯示方式
   html += `<div class="question-block"><h3>✍️ 簽名區塊</h3><div style="display:flex; gap:20px; flex-wrap:wrap;">`;
-  if (isEPA && isStudentUser) {
-    const tSigImg = currentSavedAnswers.teacherSignature || '';
-    html += `<div><h4>老師簽名</h4><img src="${tSigImg}" style="max-width:260px; border:1px solid #ccc;"></div>`;
-    html += `<div><h4>學生簽名</h4><canvas id="student-sig" class="sig-pad" width="260" height="150"></canvas></div>`;
+  if (isEPA) {
+    if (isStudentUser) {
+      const tSigImg = currentSavedAnswers.teacherSignature || '';
+      html += `<div><h4>老師簽名</h4><img src="${tSigImg}" style="max-width:260px; border:1px solid #ccc; background:#f8fafc;" alt="尚未讀取到老師簽名"></div>`;
+      html += `<div><h4>學生簽名</h4><canvas id="student-sig" class="sig-pad" width="260" height="150"></canvas><br><button type="button" class="btn-secondary" style="padding:4px 10px; margin-top:5px;" onclick="clearCanvas('student-sig')">清除重簽</button></div>`;
+    } else {
+      html += `<div><h4>老師簽名</h4><canvas id="teacher-sig" class="sig-pad" width="260" height="150"></canvas><br><button type="button" class="btn-secondary" style="padding:4px 10px; margin-top:5px;" onclick="clearCanvas('teacher-sig')">清除重簽</button></div>`;
+    }
   } else {
-    html += `<div><h4>老師簽名</h4><canvas id="teacher-sig" class="sig-pad" width="260" height="150"></canvas></div>`;
-    if(!isEPA) html += `<div><h4>學生簽名</h4><canvas id="student-sig" class="sig-pad" width="260" height="150"></canvas></div>`;
+    // DOPS
+    html += `<div><h4>老師簽名</h4><canvas id="teacher-sig" class="sig-pad" width="260" height="150"></canvas><br><button type="button" class="btn-secondary" style="padding:4px 10px; margin-top:5px;" onclick="clearCanvas('teacher-sig')">清除重簽</button></div>`;
+    html += `<div><h4>學生簽名</h4><canvas id="student-sig" class="sig-pad" width="260" height="150"></canvas><br><button type="button" class="btn-secondary" style="padding:4px 10px; margin-top:5px;" onclick="clearCanvas('student-sig')">清除重簽</button></div>`;
   }
   html += `</div></div>`;
 
-  html += `<div style="display: flex; gap: 15px;">
-            <button type="button" id="btn-draft" class="btn-secondary" style="flex:1;" onclick="submitExamHandler('draft')">暫存草稿</button>
-            <button type="button" id="btn-submit" class="btn-primary" style="flex:2;" onclick="submitExamHandler('submit')">確認送出</button>
-           </div></form>`;
+  // 🌟 按鈕區塊：依據 EPA 與身分切換「退回解鎖」按鈕
+  if (isEPA && isStudentUser) {
+    html += `<div style="display: flex; gap: 15px;">
+              <button type="button" id="btn-return" class="btn-secondary" style="flex:1; background-color:#ff9800; color:white; border:none;" onclick="submitExamHandler('return')">退回給老師修改 (解鎖)</button>
+              <button type="button" id="btn-submit" class="btn-primary" style="flex:2;" onclick="submitExamHandler('submit')">確認無誤，簽名送出</button>
+             </div></form>`;
+  } else {
+    const draftBtnText = isStudentUser ? "學生存檔(暫存)" : "教師存檔(暫存)";
+    const submitBtnText = isStudentUser ? "通知教師完成(完稿)" : "送出給學生確認";
+    html += `<div style="display: flex; gap: 15px;">
+              <button type="button" id="btn-draft" class="btn-secondary" style="flex:1;" onclick="submitExamHandler('draft')">${draftBtnText}</button>
+              <button type="button" id="btn-submit" class="btn-primary" style="flex:2;" onclick="submitExamHandler('submit')">${submitBtnText}</button>
+             </div></form>`;
+  }
 
   document.getElementById('questions-container').innerHTML = html;
   
@@ -176,6 +195,7 @@ function setupCanvas(id) {
   canvas.addEventListener('mousedown', start); canvas.addEventListener('mousemove', draw); canvas.addEventListener('mouseup', end);
   canvas.addEventListener('touchstart', (e)=>{ e.preventDefault(); start(e); }); canvas.addEventListener('touchmove', (e)=>{ e.preventDefault(); draw(e); }); canvas.addEventListener('touchend', end);
 }
+function clearCanvas(id) { const c = document.getElementById(id); if(c) c.getContext('2d').clearRect(0, 0, c.width, c.height); }
 function isCanvasBlank(canvas) { if(!canvas) return true; const b = document.createElement('canvas'); b.width=canvas.width; b.height=canvas.height; return canvas.toDataURL() === b.toDataURL(); }
 
 function saveLocalDraft() {
@@ -186,21 +206,36 @@ function saveLocalDraft() {
 
 async function submitExamHandler(actionType) {
   const form = document.getElementById('dynamic-exam-form');
-  
+  const userRolesStr = [currentUser.role, currentUser.specialRole].filter(Boolean).join(' ');
+  const isStudentUser = userRolesStr.includes('學生') || userRolesStr.includes('實習生');
+  const isEPA = document.getElementById('form-title').innerText.toUpperCase().includes('EPA');
+
   if (timerStates['ass'] && timerStates['ass'].isRunning) toggleTimer('ass', '評核'); 
 
-  if (actionType === 'submit' && !form.reportValidity()) return;
+  // 🌟 嚴格檢核邏輯
+  if (actionType === 'submit') {
+    if (!form.reportValidity()) return;
+    if (isEPA) {
+      if (!isStudentUser && isCanvasBlank(canvases['teacher-sig'])) return alert("⚠️ 老師須完成簽名才能送出。");
+      if (isStudentUser && isCanvasBlank(canvases['student-sig'])) return alert("⚠️ 學生須完成簽名才能送出結案。");
+    } else {
+      if (isCanvasBlank(canvases['teacher-sig']) || isCanvasBlank(canvases['student-sig'])) return alert("⚠️ 老師與學生雙方皆須完成簽名才能送出。");
+    }
+  }
   
   if(autoSaveInterval) clearInterval(autoSaveInterval);
   
   const submitBtn = document.getElementById('btn-submit');
   const draftBtn = document.getElementById('btn-draft');
-  const ogText = submitBtn.innerText;
+  const returnBtn = document.getElementById('btn-return');
   
+  const ogText = submitBtn.innerText;
   submitBtn.disabled = true;
-  draftBtn.disabled = true;
+  if(draftBtn) draftBtn.disabled = true;
+  if(returnBtn) returnBtn.disabled = true;
   
   if(actionType === 'submit') submitBtn.innerText = "送出中...";
+  else if (actionType === 'return') returnBtn.innerText = "退回中...";
   else draftBtn.innerText = "暫存中...";
 
   const formData = new FormData(form);
@@ -223,8 +258,8 @@ async function submitExamHandler(actionType) {
   } else {
     alert("錯誤：" + res.message);
     submitBtn.disabled = false;
-    draftBtn.disabled = false;
     submitBtn.innerText = ogText;
-    draftBtn.innerText = "暫存草稿";
+    if(draftBtn) { draftBtn.disabled = false; draftBtn.innerText = isStudentUser ? "學生存檔(暫存)" : "教師存檔(暫存)"; }
+    if(returnBtn) { returnBtn.disabled = false; returnBtn.innerText = "退回給老師修改 (解鎖)"; }
   }
 }
