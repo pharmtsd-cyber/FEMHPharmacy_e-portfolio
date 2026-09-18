@@ -1,0 +1,30 @@
+/* 基礎變數與重置 (保留原先的色彩) */
+:root { --primary-color: #005A8C; --sidebar-width: 250px; }
+
+/* 漢堡按鈕與側邊欄 */
+.hamburger { background: none; border: none; color: white; font-size: 24px; cursor: pointer; margin-right: 15px; }
+.sidebar {
+  position: fixed; top: 60px; left: -100%; width: var(--sidebar-width); height: calc(100vh - 60px);
+  background: white; box-shadow: 2px 0 10px rgba(0,0,0,0.1);
+  transition: left 0.3s ease; z-index: 99; display: flex; flex-direction: column;
+}
+.sidebar.open { left: 0; }
+.sidebar-content { padding: 20px; display: flex; flex-direction: column; gap: 15px; height: 100%; }
+.nav-btn { text-align: left; padding: 12px; border: none; background: #f4f7f6; border-radius: 8px; cursor: pointer; }
+.nav-btn:hover { background: #e0e6ed; }
+
+/* 📱 雙重渲染邏輯：透過 body 的 class 控制 */
+/* [1] 網頁版 (RWD) */
+body.layout-web .main-container {
+  margin-left: 0; transition: margin-left 0.3s ease; max-width: 1200px;
+}
+body.layout-web.sidebar-open .main-container { margin-left: var(--sidebar-width); }
+
+/* [2] 手機版 (強制大按鈕、單欄位、隱藏浮動計時器改為底部固定) */
+body.layout-mobile .theme-grid { grid-template-columns: 1fr; }
+body.layout-mobile .floating-timer-panel {
+  position: static; width: 100%; margin-top: 20px; border: none; box-shadow: none;
+}
+body.layout-mobile input, body.layout-mobile select, body.layout-mobile button {
+  font-size: 18px; padding: 15px; /* 更大的點擊範圍 */
+}
