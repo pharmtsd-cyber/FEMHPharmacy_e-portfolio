@@ -1,5 +1,6 @@
 async function backToDashboard() {
   currentRecordId = ""; currentSavedAnswers = {}; currentTemplateId = "";
+  currentAttemptCount = 0; currentTaskStatus = ""; // 🌟 清除狀態
   if(autoSaveInterval) clearInterval(autoSaveInterval);
   
   updateNavState('tab-dashboard');
@@ -13,7 +14,7 @@ async function backToDashboard() {
   const res = await callGAS('getDashboardInit', { empId: currentUser.empId });
   
   if (res && res.status === 'success') {
-    globalHistoryCounts = res.historyCounts || {}; // 🌟 儲存從後端抓來的歷史次數
+    globalHistoryCounts = res.historyCounts || {}; 
     
     const userRolesStr = [currentUser.role, currentUser.specialRole].filter(Boolean).join(' ');
     const allowedTemplates = res.templates.filter(t => {
@@ -71,7 +72,8 @@ function renderTodoList(tasks) {
 function resumeTaskByIndex(index) {
   const task = globalTasks[index]; if (!task) return;
   currentRecordId = task.recordId; 
-  currentAttemptCount = task.attempt || 0; // 🌟 讀取草稿時，記錄這是第幾次評估
+  currentAttemptCount = task.attempt || 0; 
+  currentTaskStatus = task.status || ""; // 🌟 記錄目前是待回填還是草稿
   currentSavedAnswers = task.answers; 
   currentSavedAnswers.teacherSignature = task.teacherSignature;
   currentSavedAnswers.studentSignature = task.studentSignature;
