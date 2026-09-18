@@ -2,11 +2,13 @@ async function openForm(templateId) {
   currentTemplateId = templateId; 
   if (!currentRecordId) {
     currentSavedAnswers = {}; 
-    currentAttemptCount = 0; // 新表單時重置次數
+    currentAttemptCount = 0; 
   }
   
   if (timerRaf['ass']) cancelAnimationFrame(timerRaf['ass']); 
+  if (timerRaf['fb']) cancelAnimationFrame(timerRaf['fb']); 
   timerStates['ass'] = { isRunning: false, start: null, elapsed: 0 }; 
+  timerStates['fb'] = { isRunning: false, start: null, elapsed: 0 }; 
   
   if(autoSaveInterval) clearInterval(autoSaveInterval); canvases = {};
 
@@ -17,6 +19,7 @@ async function openForm(templateId) {
       const parsed = JSON.parse(localData); 
       currentSavedAnswers = parsed.answers || {}; 
       if (parsed.timers && parsed.timers.ass) timerStates.ass = parsed.timers.ass;
+      if (parsed.timers && parsed.timers.fb) timerStates.fb = parsed.timers.fb;
     }
   }
   
@@ -36,18 +39,31 @@ function renderForm(response) {
   const isEPA = data.title.toUpperCase().includes('EPA');
   const userRolesStr = [currentUser.role, currentUser.specialRole].filter(Boolean).join(' ');
   const isStudentUser = userRolesStr.includes('學生') || userRolesStr.includes('實習生');
-  const needsAssLock = !isStudentUser && timerStates.ass.elapsed === 0 && !timerStates.ass.isRunning;
+  
+  // 🌟 判斷是否為接收方 (被指派回填的人)
+  const isReceiver = (currentTaskStatus === '待學生回填' || currentTaskStatus === '待老師回填');
+  // 如果是發起者，才需要檢核有沒有按下評核鎖定
+  const needsAssLock = !isReceiver && timerStates.ass.elapsed === 0 && !timerStates.ass.isRunning;
 
   const todayObj = new Date();
   const defaultTodayStr = new Date(todayObj.getTime() - todayObj.getTimezoneOffset() * 60000).toISOString().split('T')[0];
   const savedAssessmentDate = currentSavedAnswers['assessment_date'] || defaultTodayStr;
 
   let html = `<p style="color: #666; margin-bottom: 20px;">${data.description}</p><form id="dynamic-exam-form">`;
-  html += `<div id="ass-lock-msg" class="question-block" style="background:#fff3cd; color:#856404; display:${needsAssLock ? 'block' : 'none'};">⚠️ 請先填寫「受評學員」與「身分」後，點選「▶ 評核開始」解鎖表單</div>`;
-
-  const disableBasicInfo = isStudentUser ? 'disabled="true"' : '';
   
-  // 🌟 補回：學員身分下拉選單，與即時顯示評估次數 (onchange)
+  // 🌟 學生/接收方的專屬提示
+  if (isReceiver) {
+    html += `<div style="background:#e0f2fe; border-left:5px solid #0284c7; padding:15px; margin-bottom:20px; border-radius:4px;">
+      <h3 style="margin:0 0 10px 0; color:#0369a1;">📄 評核紀錄檢視</h3>
+      <p style="margin:0; font-size:14px; color:#0c4a6e;">此為對方填寫完畢之紀錄，請檢視內容並完成您專屬的欄位與簽名。</p>
+    </div>`;
+  } else {
+    html += `<div id="ass-lock-msg" class="question-block" style="background:#fff3cd; color:#856404; display:${needsAssLock ? 'block' : 'none'};">⚠️ 請先填寫「受評學員」與「身分」後，點選「▶ 評核開始」解鎖表單</div>`;
+  }
+
+  // 接收方不能改基本資料
+  const disableBasicInfo = isReceiver ? 'disabled="true"' : '';
+  
   html += `
   <div style="display:flex; gap:15px; flex-wrap:wrap; margin-bottom: 20px;">
     <div class="question-block" style="flex:1; border-left: 5px solid var(--primary-color); padding: 15px; margin-bottom:0;">
@@ -75,27 +91,57 @@ function renderForm(response) {
     </div>
   </div>`;
 
-  html += `
-  <div class="floating-timer-panel">
-    <h3 style="margin-top:0; color: var(--secondary-color);">⏳ 計時控制</h3>
-    <div class="timer-row" style="border-bottom:none; margin-bottom:0; padding-bottom:0;">
+  // 🌟 計時器區塊 (依據是否為接收方決定隱藏按鈕)
+  html += `<div class="floating-timer-panel"><h3 style="margin-top:0; color: var(--secondary-color);">⏳ 計時控制</h3>`;
+  
+  if (isReceiver) {
+    // 接收方只顯示紀錄文字
+    html += `<div style="margin-bottom:10px; font-size:15px; color:#444;"><strong>評核花費時間：</strong> ${currentSavedAnswers['time_assessment'] || '無紀錄'}</div>`;
+    if (!isEPA) {
+      html += `<div style="font-size:15px; color:#444;"><strong>雙向回饋時間：</strong> ${currentSavedAnswers['time_feedback'] || '無紀錄'}</div>`;
+    }
+  } else {
+    // 發起方顯示控制按鈕
+    html += `
+    <div class="timer-row" style="border-bottom:${isEPA ? 'none' : '1px solid #eee'}; margin-bottom:${isEPA ? '0' : '10px'}; padding-bottom:${isEPA ? '0' : '10px'};">
       <button type="button" id="btn-ass" class="btn-secondary" onclick="toggleTimer('ass', '評核')" style="width:100%;">▶ 評核開始</button>
       <div style="display:flex; justify-content:space-between; margin-top:8px;"><span id="text-ass">未開始</span><a href="javascript:void(0)" onclick="resetTimer('ass')">重置</a></div>
       <input type="hidden" name="time_assessment" id="val_ass" value="${currentSavedAnswers['time_assessment'] || ''}">
-    </div>
-  </div>`;
+    </div>`;
+    
+    // DOPS 才顯示雙向回饋按鈕
+    if (!isEPA) {
+      html += `
+      <div class="timer-row" style="border-bottom:none; margin-bottom:0; padding-bottom:0;">
+        <button type="button" id="btn-fb" class="btn-secondary" onclick="toggleTimer('fb', '雙向回饋')" style="width:100%;">▶ 雙向回饋開始</button>
+        <div style="display:flex; justify-content:space-between; margin-top:8px;"><span id="text-fb">未開始</span><a href="javascript:void(0)" onclick="resetTimer('fb')">重置</a></div>
+        <input type="hidden" name="time_feedback" id="val_fb" value="${currentSavedAnswers['time_feedback'] || ''}">
+      </div>`;
+    }
+  }
+  html += `</div>`;
 
+  // 🌟 題目迴圈與權限鎖定
   data.questions.forEach(q => {
-    if (q.targetRole && q.targetRole.includes('學生') && !isStudentUser) return; 
     if (q.type === 'heading') { html += `<h3>${q.question}</h3>`; return; }
     
-    const isLocked = q.targetRole.includes('教師') && isStudentUser;
-    const inputClass = isLocked ? '' : 'teacher-input';
-    const disableInput = isLocked || (needsAssLock && !isLocked);
-    const reqAttr = (q.required && !isLocked) ? 'required' : '';
-    const disabledAttr = disableInput ? 'disabled="true"' : ''; 
+    // 嚴格依照 J 欄 (targetRole) 判斷使用者是否可填寫
+    let canEdit = true;
+    if (q.targetRole) {
+      if (isStudentUser && !q.targetRole.includes('學生')) canEdit = false;
+      if (!isStudentUser && !q.targetRole.includes('教師')) canEdit = false;
+    }
     
-    html += `<div class="question-block"><h4>${q.question}</h4>`;
+    // 輸入框的屬性設定
+    const inputClass = canEdit ? 'teacher-input' : '';
+    // 如果權限不符、或尚未解鎖，就設定為 disabled
+    const disableInput = !canEdit || (needsAssLock && canEdit);
+    const reqAttr = (q.required && canEdit && !disableInput) ? 'required' : '';
+    const disabledAttr = disableInput ? 'disabled="true"' : ''; 
+    const bgStyle = !canEdit ? 'background-color: #f8fafc; border-left: 4px solid #94a3b8;' : '';
+    const badgeHtml = !canEdit ? '<span class="status-badge status-pending" style="margin-left:8px;">唯讀</span>' : '';
+    
+    html += `<div class="question-block" style="${bgStyle}"><h4>${q.question} ${badgeHtml}</h4>`;
     let savedVal = currentSavedAnswers[q.questionId] || "";
 
     if (q.type === 'select') {
@@ -133,8 +179,11 @@ function renderForm(response) {
   } else {
     const draftBtnText = isStudentUser ? "學生存檔(暫存)" : "教師存檔(暫存)";
     const submitBtnText = isStudentUser ? "通知教師完成(完稿)" : "送出給學生確認";
+    // 接收方隱藏草稿鍵
+    const draftBtnHtml = isReceiver ? '' : `<button type="button" id="btn-draft" class="btn-secondary" style="flex:1;" onclick="submitExamHandler('draft')">${draftBtnText}</button>`;
+    
     html += `<div style="display: flex; gap: 15px;">
-              <button type="button" id="btn-draft" class="btn-secondary" style="flex:1;" onclick="submitExamHandler('draft')">${draftBtnText}</button>
+              ${draftBtnHtml}
               <button type="button" id="btn-submit" class="btn-primary" style="flex:2;" onclick="submitExamHandler('submit')">${submitBtnText}</button>
              </div></form>`;
   }
@@ -144,25 +193,24 @@ function renderForm(response) {
   setTimeout(() => { 
     setupCanvas('teacher-sig'); 
     setupCanvas('student-sig'); 
-    updateAttemptCount(); // 🌟 初始化次數顯示
+    updateAttemptCount(); 
   }, 100);
   
   autoSaveInterval = setInterval(saveLocalDraft, 3000);
+  
+  // 恢復舊有計時器顯示
   if(timerStates['ass'] && timerStates['ass'].elapsed > 0) updateTimerUI('ass'); 
+  if(timerStates['fb'] && timerStates['fb'].elapsed > 0) updateTimerUI('fb'); 
 }
 
-// 🌟 新增：即時顯示目前是該學生的「第幾次評估」
 function updateAttemptCount() {
   const studentRaw = document.getElementById('native-student-input').value;
   const display = document.getElementById('attempt-count-display');
-  if (!studentRaw || !currentTemplateId) {
-    display.innerText = ""; return;
-  }
-  
+  if (!studentRaw || !currentTemplateId) { display.innerText = ""; return; }
   const studentId = studentRaw.split('-')[0].trim().toUpperCase();
   
   if (currentRecordId && currentAttemptCount > 0) {
-    display.innerText = `📊 本次為第 ${currentAttemptCount} 次評估 (草稿接續)`;
+    display.innerText = `📊 本次為第 ${currentAttemptCount} 次評估紀錄`;
   } else {
     const historyCount = globalHistoryCounts[`${studentId}_${currentTemplateId}`] || 0;
     display.innerText = `📊 系統試算：本次為第 ${historyCount + 1} 次評估`;
@@ -172,18 +220,16 @@ function updateAttemptCount() {
 function getStr(sec) { return `${Math.floor(sec / 60)}分${sec % 60}秒`; }
 
 function toggleTimer(type, label) {
-  // 🌟 強制防呆：沒填身分或受評者，不給解鎖計時
+  // 強制防呆：沒填身分或受評者，不給解鎖評核計時
   if (type === 'ass' && !timerStates[type].isRunning) {
     const studentInput = document.getElementById('native-student-input');
     const roleInput = document.getElementById('native-student-role');
     
     if (studentInput && !studentInput.value.trim()) {
-      alert("⚠️ 請先選擇「受評學員」才能解鎖並開始評核！");
-      return; 
+      alert("⚠️ 請先選擇「受評學員」才能解鎖並開始評核！"); return; 
     }
     if (roleInput && !roleInput.value.trim()) {
-      alert("⚠️ 請先選擇「學員身分」才能解鎖並開始評核！");
-      return; 
+      alert("⚠️ 請先選擇「學員身分」才能解鎖並開始評核！"); return; 
     }
   }
 
@@ -260,7 +306,9 @@ async function submitExamHandler(actionType) {
   const isStudentUser = userRolesStr.includes('學生') || userRolesStr.includes('實習生');
   const isEPA = document.getElementById('form-title').innerText.toUpperCase().includes('EPA');
 
+  // 🌟 自動暫停所有計時器
   if (timerStates['ass'] && timerStates['ass'].isRunning) toggleTimer('ass', '評核'); 
+  if (timerStates['fb'] && timerStates['fb'].isRunning) toggleTimer('fb', '雙向回饋'); 
 
   if (actionType === 'submit') {
     if (!form.reportValidity()) return;
