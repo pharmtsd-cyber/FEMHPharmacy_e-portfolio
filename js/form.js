@@ -2,11 +2,9 @@ async function openForm(templateId) {
   currentTemplateId = templateId; 
   if (!currentRecordId) currentSavedAnswers = {}; 
   
-  // 重置計時器狀態
-  for (let key in timerStates) { 
-    if (timerRaf[key]) cancelAnimationFrame(timerRaf[key]); 
-    timerStates[key] = { isRunning: false, start: null, elapsed: 0 }; 
-  }
+  if (timerRaf['ass']) cancelAnimationFrame(timerRaf['ass']); 
+  timerStates['ass'] = { isRunning: false, start: null, elapsed: 0 }; 
+  
   if(autoSaveInterval) clearInterval(autoSaveInterval); canvases = {};
 
   const localKey = `draft_${currentUser.empId}_${templateId}`; 
@@ -15,7 +13,7 @@ async function openForm(templateId) {
     if (confirm('💡 發現未存檔的本機暫存資料，請問是否恢復？')) {
       const parsed = JSON.parse(localData); 
       currentSavedAnswers = parsed.answers || {}; 
-      if (parsed.timers) timerStates = parsed.timers;
+      if (parsed.timers && parsed.timers.ass) timerStates.ass = parsed.timers.ass;
     }
   }
   
@@ -45,7 +43,6 @@ function renderForm(response) {
 
   const disableBasicInfo = isStudentUser ? 'disabled="true"' : '';
   
-  // 基礎資訊
   html += `
   <div style="display:flex; gap:15px; flex-wrap:wrap; margin-bottom: 20px;">
     <div class="question-block" style="flex:1; border-left: 5px solid var(--primary-color); padding: 15px; margin-bottom:0;">
@@ -59,18 +56,16 @@ function renderForm(response) {
   globalUserList.forEach(u => { html += `<option value="${u.empId} - ${u.name}"></option>`; });
   html += `</datalist></div></div>`;
 
-  // 💡 移除了觀察時間，只留下評核時間
   html += `
   <div class="floating-timer-panel">
     <h3 style="margin-top:0; color: var(--secondary-color);">⏳ 計時控制</h3>
-    <div class="timer-row" style="border-bottom:none; margin-bottom:0;">
+    <div class="timer-row" style="border-bottom:none; margin-bottom:0; padding-bottom:0;">
       <button type="button" id="btn-ass" class="btn-secondary" onclick="toggleTimer('ass', '評核')" style="width:100%;">▶ 評核開始</button>
       <div style="display:flex; justify-content:space-between; margin-top:8px;"><span id="text-ass">未開始</span><a href="javascript:void(0)" onclick="resetTimer('ass')">重置</a></div>
       <input type="hidden" name="time_assessment" id="val_ass" value="${currentSavedAnswers['time_assessment'] || ''}">
     </div>
   </div>`;
 
-  // 渲染題目
   data.questions.forEach(q => {
     if (q.targetRole && q.targetRole.includes('學生') && !isStudentUser) return; 
     if (q.type === 'heading') { html += `<h3>${q.question}</h3>`; return; }
@@ -96,7 +91,6 @@ function renderForm(response) {
     html += `</div>`;
   });
 
-  // 簽名區塊
   html += `<div class="question-block"><h3>✍️ 簽名區塊</h3><div style="display:flex; gap:20px; flex-wrap:wrap;">`;
   if (isEPA && isStudentUser) {
     const tSigImg = currentSavedAnswers.teacherSignature || '';
@@ -118,7 +112,6 @@ function renderForm(response) {
   setTimeout(() => { setupCanvas('teacher-sig'); setupCanvas('student-sig'); }, 100);
   autoSaveInterval = setInterval(saveLocalDraft, 3000);
   
-  // 只恢復 ass (評估)
   if(timerStates['ass'] && timerStates['ass'].elapsed > 0) updateTimerUI('ass'); 
 }
 
@@ -145,7 +138,6 @@ function toggleTimer(type, label) {
       timerRaf[type] = requestAnimationFrame(updateTime);
     };
     updateTime();
-
   } else {
     timerStates[type].isRunning = false;
     cancelAnimationFrame(timerRaf[type]);
@@ -158,11 +150,7 @@ function toggleTimer(type, label) {
 function updateTimerUI(type, label = "") {
   const timeStr = getStr(timerStates[type].elapsed);
   const btn = document.getElementById(`btn-${type}`);
-  if(btn) { 
-    btn.innerText = `▶ 接續${label}`; 
-    btn.style.background = ''; 
-    btn.style.color = '';
-  }
+  if(btn) { btn.innerText = `▶ 接續${label}`; btn.style.background = ''; btn.style.color = ''; }
   document.getElementById(`text-${type}`).innerText = `已記錄: ${timeStr}`; 
   document.getElementById(`val_${type}`).value = timeStr; 
 }
