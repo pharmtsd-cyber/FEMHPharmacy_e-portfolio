@@ -42,8 +42,22 @@ label { display: flex; align-items: center; margin: 12px 0; cursor: pointer; pad
 .sig-pad { border: 2px dashed #cbd5e1; border-radius: 8px; background-color: #ffffff; cursor: crosshair; touch-action: none; width: 100%; max-width: 280px; box-sizing: border-box; }
 
 /* 預設浮動計時器 (網頁版) */
-.floating-timer-panel { position: fixed; top: 50%; right: 20px; transform: translateY(-50%); width: 320px; background: white; border: 2px solid var(--secondary-color); border-radius: 12px; box-shadow: 0 8px 30px rgba(0,0,0,0.15); padding: 20px; z-index: 1000; }
-.timer-row { margin-bottom: 15px; border-bottom: 1px solid #eee; padding-bottom: 10px; }
+.floating-timer-panel {
+    position: relative; 
+    top: auto; 
+    right: auto; 
+    transform: none; 
+    width: 100%; 
+    background: white; 
+    border: 2px solid var(--secondary-color); 
+    border-radius: 12px;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.05); 
+    padding: 20px; 
+    margin-bottom: 25px; 
+    box-sizing: border-box;
+  }
+  .timer-row { margin-bottom: 15px; border-bottom: 1px solid #eee; padding-bottom: 10px; }
+  .timer-row:last-child { border-bottom: none; margin-bottom: 0; padding-bottom: 0; }
 
 /* 📱 手機版適配 (透過 JS 切換 body 的 class) */
 body.layout-mobile .main-container { margin-left: auto; margin-right: auto; }
