@@ -1,16 +1,19 @@
-async function handleLogin() {
+async function handleLogin(mode) {
   const empId = document.getElementById('login-empid').value.trim();
   if (!empId) return alert('請輸入員工編號');
   
-  // 套用裝置模式 (RWD 或 手機)
-  const deviceMode = document.querySelector('input[name="device-mode"]:checked').value;
-  document.body.className = `layout-${deviceMode}`;
+  // 直接套用傳進來的 mode ('web' 或 'mobile')
+  document.body.className = `layout-${mode}`;
   
-  const btn = document.getElementById('btn-login'); 
-  btn.innerText = "登入中..."; btn.disabled = true;
-
+  // 鎖定所有按鈕防呆
+  const buttons = document.querySelectorAll('.login-card button');
+  buttons.forEach(b => { b.disabled = true; b.style.opacity = '0.7'; });
+  
   const res = await callGAS('userLogin', { empId: empId });
   
+  // 解除鎖定
+  buttons.forEach(b => { b.disabled = false; b.style.opacity = '1'; });
+
   if (res.status === 'success') {
     currentUser = res.user; globalUserList = res.userList; 
     document.getElementById('display-name').innerText = currentUser.name;
@@ -22,7 +25,6 @@ async function handleLogin() {
     backToDashboard(); 
   } else { 
     alert(res.message); 
-    btn.innerText = "登入系統"; btn.disabled = false; 
   }
 }
 
@@ -33,9 +35,6 @@ function logout() {
   document.getElementById('hamburger-btn').style.display = 'none'; 
   document.getElementById('sidebar').classList.remove('open');
   document.body.classList.remove('sidebar-open');
-  
-  const loginBtn = document.getElementById('btn-login'); 
-  loginBtn.innerText = "登入系統"; loginBtn.disabled = false;
   
   if(autoSaveInterval) clearInterval(autoSaveInterval); 
   switchView('view-login');
