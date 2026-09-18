@@ -1,5 +1,5 @@
 // ⚠️ 請務必換成您用「個人 @gmail.com 帳號」全新部署的 API 網址！
-const GAS_API_URL = "https://script.google.com/macros/s/AKfycbxDB2GJZdwSccL5Fk1KGkObxEfdCIwj8QeQ7R0W7VfKvbsGVSEErxT7h3Q-4Y6hyHeC/exec";
+const GAS_API_URL = "https://script.google.com/macros/s/AKfycbySSI6fwlxRO_bHJACWAaboFuUaPzb6mMBOvs3zNbltXr8BYExWXzn-k1YQVmbxrhnM/exec";
 
 async function callGAS(action, params = {}) {
   try {
