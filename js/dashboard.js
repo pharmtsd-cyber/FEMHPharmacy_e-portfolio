@@ -5,24 +5,45 @@ async function backToDashboard() {
   updateNavState('tab-dashboard');
   switchView('view-dashboard'); 
   
-  document.getElementById('theme-buttons-container').innerHTML = '載入模組中...';
+  // 顯示載入動畫
+  document.getElementById('theme-buttons-container').innerHTML = '<div style="padding: 30px; text-align: center; color:#666;">⏳ 載入模組與待辦事項中...</div>';
+  document.getElementById('template-list-container').innerHTML = '';
+  document.getElementById('selected-theme-title').style.display = 'none';
+  document.getElementById('todo-section').style.display = 'none';
+
+  // 💡 提速優化：同時發起兩個請求
+  const [dashRes, tasksRes] = await Promise.all([
+    callGAS('getDashboardData'),
+    callGAS('getMyTasks', { empId: currentUser.empId })
+  ]).catch(err => {
+    alert("載入失敗，請檢查連線");
+    return [null, null];
+  });
   
-  const res = await callGAS('getDashboardData');
-  if(res.status === 'success') {
+  // 處理模組清單
+  if (dashRes && dashRes.status === 'success') {
     const userRolesStr = [currentUser.role, currentUser.specialRole].filter(Boolean).join(' ');
-    const allowedTemplates = res.templates.filter(t => {
+    
+    // 💡 修正權限判斷邏輯，解決空白問題
+    const allowedTemplates = dashRes.templates.filter(t => {
       if (!t.allowedRoles || t.allowedRoles.trim() === "") return true;
-      return userRolesStr.includes(currentUser.role) || userRolesStr.includes(currentUser.specialRole);
+      const allowedArr = t.allowedRoles.split(',').map(r => r.trim());
+      return allowedArr.some(r => userRolesStr.includes(r));
     });
+    
     allTemplates = allowedTemplates; 
     const allowedThemes = new Set(allowedTemplates.map(t => t.theme));
     
     let themeHTML = '';
-    if (allowedThemes.size === 0) themeHTML = '<p style="color:red; text-align:center;">目前沒有需要填寫的項目</p>';
+    if (allowedThemes.size === 0) themeHTML = '<p style="color:#e11d48; text-align:center; grid-column: 1 / -1;">您目前沒有開放的考核項目</p>';
     else allowedThemes.forEach(theme => themeHTML += `<div class="theme-card" onclick="filterTemplatesByTheme('${theme}')">${theme}</div>`);
     document.getElementById('theme-buttons-container').innerHTML = themeHTML;
-    
-    const tasksRes = await callGAS('getMyTasks', { empId: currentUser.empId });
+  } else {
+    document.getElementById('theme-buttons-container').innerHTML = '<p style="color:red;">載入失敗，請重新整理</p>';
+  }
+
+  // 處理待辦事項
+  if (tasksRes && tasksRes.status === 'success') {
     renderTodoList(tasksRes);
   }
 }
@@ -40,12 +61,11 @@ function filterTemplatesByTheme(selectedTheme) {
 }
 
 function renderTodoList(response) {
-  if (response.status !== 'success') return;
   globalTasks = response.data; 
   const container = document.getElementById('todo-list-container'); 
   const section = document.getElementById('todo-section');
   
-  if (globalTasks.length === 0) { section.style.display = 'none'; return; }
+  if (!globalTasks || globalTasks.length === 0) { section.style.display = 'none'; return; }
   
   let html = '';
   globalTasks.forEach((task, index) => {
