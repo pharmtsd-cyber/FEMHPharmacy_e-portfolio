@@ -21,7 +21,7 @@ async function openForm(templateId) {
   
   switchView('view-form'); 
   document.getElementById('form-title').innerText = "題目載入中..."; 
-  document.getElementById('questions-container').innerHTML = ""; 
+  document.getElementById('questions-container').innerHTML = '<div style="padding:30px; text-align:center; color:#666;">⏳ 題目生成中...</div>'; 
   
   const res = await callGAS('getTemplateData', { templateId, empId: currentUser.empId });
   if (res.status === 'error') { alert("❌ " + res.message); backToDashboard(); return; }
@@ -59,16 +59,11 @@ function renderForm(response) {
   globalUserList.forEach(u => { html += `<option value="${u.empId} - ${u.name}"></option>`; });
   html += `</datalist></div></div>`;
 
-  // 優化後的計時器面板 (隱藏欄位自動跟隨 state)
+  // 💡 移除了觀察時間，只留下評核時間
   html += `
   <div class="floating-timer-panel">
     <h3 style="margin-top:0; color: var(--secondary-color);">⏳ 計時控制</h3>
-    <div class="timer-row">
-      <button type="button" id="btn-obs" class="btn-secondary" onclick="toggleTimer('obs', '直接觀察')" style="width:100%;">▶ 開始直接觀察</button>
-      <div style="display:flex; justify-content:space-between; margin-top:8px;"><span id="text-obs">未開始</span><a href="javascript:void(0)" onclick="resetTimer('obs')">重置</a></div>
-      <input type="hidden" name="time_observation" id="val_obs" value="${currentSavedAnswers['time_observation'] || ''}">
-    </div>
-    <div class="timer-row">
+    <div class="timer-row" style="border-bottom:none; margin-bottom:0;">
       <button type="button" id="btn-ass" class="btn-secondary" onclick="toggleTimer('ass', '評核')" style="width:100%;">▶ 評核開始</button>
       <div style="display:flex; justify-content:space-between; margin-top:8px;"><span id="text-ass">未開始</span><a href="javascript:void(0)" onclick="resetTimer('ass')">重置</a></div>
       <input type="hidden" name="time_assessment" id="val_ass" value="${currentSavedAnswers['time_assessment'] || ''}">
@@ -113,7 +108,6 @@ function renderForm(response) {
   }
   html += `</div></div>`;
 
-  // 送出按鈕
   html += `<div style="display: flex; gap: 15px;">
             <button type="button" id="btn-draft" class="btn-secondary" style="flex:1;" onclick="submitExamHandler('draft')">暫存草稿</button>
             <button type="button" id="btn-submit" class="btn-primary" style="flex:2;" onclick="submitExamHandler('submit')">確認送出</button>
@@ -123,10 +117,11 @@ function renderForm(response) {
   
   setTimeout(() => { setupCanvas('teacher-sig'); setupCanvas('student-sig'); }, 100);
   autoSaveInterval = setInterval(saveLocalDraft, 3000);
-  ['obs', 'ass'].forEach(type => { if(timerStates[type].elapsed > 0) updateTimerUI(type); });
+  
+  // 只恢復 ass (評估)
+  if(timerStates['ass'] && timerStates['ass'].elapsed > 0) updateTimerUI('ass'); 
 }
 
-// ⏱️ 計時器優化：使用 requestAnimationFrame
 function getStr(sec) { return `${Math.floor(sec / 60)}分${sec % 60}秒`; }
 
 function toggleTimer(type, label) {
@@ -135,6 +130,7 @@ function toggleTimer(type, label) {
     timerStates[type].isRunning = true;
     document.getElementById(`btn-${type}`).innerText = `■ 停止${label}`;
     document.getElementById(`btn-${type}`).style.background = '#e11d48';
+    document.getElementById(`btn-${type}`).style.color = 'white';
     
     if (type === 'ass') {
       document.querySelectorAll('.teacher-input').forEach(el => el.disabled = false);
@@ -162,9 +158,13 @@ function toggleTimer(type, label) {
 function updateTimerUI(type, label = "") {
   const timeStr = getStr(timerStates[type].elapsed);
   const btn = document.getElementById(`btn-${type}`);
-  if(btn) { btn.innerText = `▶ 接續${label}`; btn.style.background = ''; }
+  if(btn) { 
+    btn.innerText = `▶ 接續${label}`; 
+    btn.style.background = ''; 
+    btn.style.color = '';
+  }
   document.getElementById(`text-${type}`).innerText = `已記錄: ${timeStr}`; 
-  document.getElementById(`val_${type}`).value = timeStr; // 寫入隱藏 input 以便送出
+  document.getElementById(`val_${type}`).value = timeStr; 
 }
 
 function resetTimer(type) {
@@ -174,11 +174,10 @@ function resetTimer(type) {
     document.getElementById(`val_${type}`).value = "";
     document.getElementById(`text-${type}`).innerText = '未開始';
     const btn = document.getElementById(`btn-${type}`);
-    if(btn) { btn.innerText = `▶ 開始`; btn.style.background = ''; }
+    if(btn) { btn.innerText = `▶ 開始`; btn.style.background = ''; btn.style.color = ''; }
   }
 }
 
-// ✍️ 畫布邏輯
 function setupCanvas(id) {
   const canvas = document.getElementById(id); if (!canvas || canvases[id]) return;
   const ctx = canvas.getContext('2d'); let isDrawing = false; canvases[id] = canvas;
@@ -191,7 +190,6 @@ function setupCanvas(id) {
 }
 function isCanvasBlank(canvas) { if(!canvas) return true; const b = document.createElement('canvas'); b.width=canvas.width; b.height=canvas.height; return canvas.toDataURL() === b.toDataURL(); }
 
-// 💾 暫存與送出邏輯
 function saveLocalDraft() {
   const form = document.getElementById('dynamic-exam-form'); if(!form) return;
   const formData = new FormData(form); const answers = Object.fromEntries(formData);
@@ -201,13 +199,21 @@ function saveLocalDraft() {
 async function submitExamHandler(actionType) {
   const form = document.getElementById('dynamic-exam-form');
   
-  // 送出前停止計時器並更新隱藏欄位
-  ['obs', 'ass'].forEach(type => { if (timerStates[type].isRunning) toggleTimer(type, type==='obs'?'觀察':'評核'); });
+  if (timerStates['ass'] && timerStates['ass'].isRunning) toggleTimer('ass', '評核'); 
 
   if (actionType === 'submit' && !form.reportValidity()) return;
   
   if(autoSaveInterval) clearInterval(autoSaveInterval);
-  document.getElementById('btn-submit').innerText = "送出中...";
+  
+  const submitBtn = document.getElementById('btn-submit');
+  const draftBtn = document.getElementById('btn-draft');
+  const ogText = submitBtn.innerText;
+  
+  submitBtn.disabled = true;
+  draftBtn.disabled = true;
+  
+  if(actionType === 'submit') submitBtn.innerText = "送出中...";
+  else draftBtn.innerText = "暫存中...";
 
   const formData = new FormData(form);
   const answers = Object.fromEntries(formData);
@@ -228,6 +234,9 @@ async function submitExamHandler(actionType) {
     backToDashboard(); 
   } else {
     alert("錯誤：" + res.message);
-    document.getElementById('btn-submit').innerText = "確認送出";
+    submitBtn.disabled = false;
+    draftBtn.disabled = false;
+    submitBtn.innerText = ogText;
+    draftBtn.innerText = "暫存草稿";
   }
 }
