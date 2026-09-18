@@ -2,13 +2,12 @@ let currentUser = null;
 let allTemplates = []; 
 let currentTemplateId = ""; 
 let currentRecordId = ""; 
+let currentAttemptCount = 0; // 🌟 記錄目前編輯的這份是第幾次
 let currentSavedAnswers = {}; 
 let globalUserList = []; 
 let globalTasks = []; 
-// 🌟 修正：徹底清理觀察時間，只留下評估時間 (ass)
-let timerStates = { 
-  ass: { isRunning: false, start: null, elapsed: 0 }
-};
+let globalHistoryCounts = {}; // 🌟 記錄所有學生做過各模板的歷史次數
+let timerStates = { ass: { isRunning: false, start: null, elapsed: 0 } };
 let timerRaf = {}; 
 let autoSaveInterval = null; 
 let canvases = {};
