@@ -42,10 +42,11 @@ function renderForm(response) {
   
   const isReceiver = (currentTaskStatus === '待學生回填' || currentTaskStatus === '待老師回填');
   
-  // 🌟 判斷是否為「學生退回給老師修改」的狀態 (有先前紀錄，且目前身分是老師)
-  const isReturnedToTeacher = (!isStudentUser && currentRecordId && currentSavedAnswers['time_assessment']);
+  // 🌟 嚴格區分：只有當狀態真正是「學生退回」或紀錄顯示被退回時才顯示退回橫幅
+  // 這裡我們用 currentTaskStatus 來精準判斷
+  const isStudentReturned = (!isStudentUser && currentTaskStatus === '老師暫存' && currentRecordId && currentSavedAnswers['time_assessment']);
   
-  const needsAssLock = !isReceiver && !isReturnedToTeacher && timerStates.ass.elapsed === 0 && !timerStates.ass.isRunning;
+  const needsAssLock = !isReceiver && !isStudentReturned && timerStates.ass.elapsed === 0 && !timerStates.ass.isRunning;
 
   const todayObj = new Date();
   const defaultTodayStr = new Date(todayObj.getTime() - todayObj.getTimezoneOffset() * 60000).toISOString().split('T')[0];
@@ -58,8 +59,8 @@ function renderForm(response) {
       <h3 style="margin:0 0 10px 0; color:#0369a1;">📄 評核紀錄檢視</h3>
       <p style="margin:0; font-size:14px; color:#0c4a6e;">此為對方填寫完畢之紀錄，請檢視內容並完成您專屬的欄位與簽名。</p>
     </div>`;
-  } else if (isReturnedToTeacher) {
-    // 🌟 退回重寫時的提示橫幅
+  } else if (isStudentReturned) {
+    // 🌟 專屬：學生已退回修改的提示橫幅
     html += `<div style="background:#fff3cd; border-left:5px solid #f59e0b; padding:15px; margin-bottom:20px; border-radius:4px;">
       <h3 style="margin:0 0 5px 0; color:#b45309;">🔄 學生已將表單退回修改</h3>
       <p style="margin:0; font-size:14px; color:#92400e;">先前計時與評估內容已保留，您可以直接進行修改並重新送出。</p>
@@ -68,7 +69,7 @@ function renderForm(response) {
     html += `<div id="ass-lock-msg" class="question-block" style="background:#fff3cd; color:#856404; display:${needsAssLock ? 'block' : 'none'};">⚠️ 請先填寫「受評學員」與「身分」後，點選「▶ 評核開始」解鎖表單</div>`;
   }
 
-  const disableBasicInfo = (isReceiver || isReturnedToTeacher) ? 'disabled="true"' : '';
+  const disableBasicInfo = (isReceiver || isStudentReturned) ? 'disabled="true"' : '';
   
   html += `
   <div style="display:flex; gap:15px; flex-wrap:wrap; margin-bottom: 20px;">
@@ -97,15 +98,16 @@ function renderForm(response) {
     </div>
   </div>`;
 
-  // 🌟 調整：如果是被學生退回的表單，直接顯示「已記錄的時間文字」，不需操作計時器按鈕
+  // 🌟 計時控制區塊：如果是「學生退回」，只顯示花費時間；如果是「老師暫存」，允許接續計時或重置
   html += `<div class="floating-timer-panel"><h3 style="margin-top:0; color: var(--secondary-color);">⏳ 計時控制</h3>`;
   
-  if (isReceiver || isReturnedToTeacher) {
+  if (isReceiver || isStudentReturned) {
     html += `<div style="margin-bottom:10px; font-size:15px; color:#444;"><strong>評核花費時間：</strong> ${currentSavedAnswers['time_assessment'] || '無紀錄'}</div>`;
     if (!isEPA) {
       html += `<div style="font-size:15px; color:#444;"><strong>雙向回饋時間：</strong> ${currentSavedAnswers['time_feedback'] || '無紀錄'}</div>`;
     }
   } else {
+    // 老師暫存或全新表單：提供完整的計時按鈕與防呆重置
     html += `
     <div class="timer-row" style="border-bottom:${isEPA ? 'none' : '1px solid #eee'}; margin-bottom:${isEPA ? '0' : '10px'}; padding-bottom:${isEPA ? '0' : '10px'};">
       <button type="button" id="btn-ass" class="btn-secondary" onclick="toggleTimer('ass', '評核')" style="width:100%;">▶ 評核開始</button>
@@ -124,7 +126,7 @@ function renderForm(response) {
   }
   html += `</div>`;
 
-  // 題目迴圈
+  // 題目迴圈與身分權限鎖定
   data.questions.forEach(q => {
     if (q.type === 'heading') { html += `<h3>${q.question}</h3>`; return; }
     
@@ -198,8 +200,17 @@ function renderForm(response) {
   
   autoSaveInterval = setInterval(saveLocalDraft, 3000);
   
-  if(timerStates['ass'] && timerStates['ass'].elapsed > 0) updateTimerUI('ass'); 
-  if(timerStates['fb'] && timerStates['fb'].elapsed > 0) updateTimerUI('fb'); 
+  // 🌟 如果先前已有時間紀錄（例如老師暫存接續），自動帶入 UI 顯示
+  if (currentSavedAnswers['time_assessment'] && !timerStates['ass'].elapsed) {
+    document.getElementById('text-ass').innerText = `已記錄: ${currentSavedAnswers['time_assessment']}`;
+    const btnAss = document.getElementById('btn-ass');
+    if (btnAss) btnAss.innerText = `▶ 接續評核`;
+  }
+  if (currentSavedAnswers['time_feedback'] && !timerStates['fb'].elapsed) {
+    document.getElementById('text-fb').innerText = `已記錄: ${currentSavedAnswers['time_feedback']}`;
+    const btnFb = document.getElementById('btn-fb');
+    if (btnFb) btnFb.innerText = `▶ 接續雙向回饋`;
+  }
 }
 
 function updateAttemptCount() {
@@ -270,9 +281,10 @@ function updateTimerUI(type, label = "") {
 }
 
 function resetTimer(type) {
-  if(confirm('確定歸零？')) {
+  const label = type === 'ass' ? '評核計時' : '雙向回饋計時';
+  if (confirm(`⚠️ 確定要將【${label}】歸零重設嗎？這將會清除目前已記錄的時間。`)) {
     timerStates[type] = { isRunning: false, start: null, elapsed: 0 };
-    cancelAnimationFrame(timerRaf[type]);
+    if (timerRaf[type]) cancelAnimationFrame(timerRaf[type]);
     document.getElementById(`val_${type}`).value = "";
     document.getElementById(`text-${type}`).innerText = '未開始';
     const btn = document.getElementById(`btn-${type}`);
