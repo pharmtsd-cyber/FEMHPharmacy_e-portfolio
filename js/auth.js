@@ -2,16 +2,14 @@ async function handleLogin(mode) {
   const empId = document.getElementById('login-empid').value.trim();
   if (!empId) return alert('請輸入員工編號');
   
-  // 直接套用傳進來的 mode ('web' 或 'mobile')
+  // 🌟 修正：直接套用按鈕傳進來的 mode，不再去抓已刪除的選項
   document.body.className = `layout-${mode}`;
   
-  // 鎖定所有按鈕防呆
   const buttons = document.querySelectorAll('.login-card button');
   buttons.forEach(b => { b.disabled = true; b.style.opacity = '0.7'; });
   
   const res = await callGAS('userLogin', { empId: empId });
   
-  // 解除鎖定
   buttons.forEach(b => { b.disabled = false; b.style.opacity = '1'; });
 
   if (res.status === 'success') {
