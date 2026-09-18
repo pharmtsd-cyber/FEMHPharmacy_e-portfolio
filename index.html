@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>亞東紀念醫院藥學部 數位學習護照</title>
+  <link rel="stylesheet" href="css/style.css">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body class="layout-web"> <!-- 預設為網頁佈局 -->
+  
+  <!-- 頂部導覽列 (包含漢堡按鈕) -->
+  <header class="navbar">
+    <div class="nav-left">
+      <!-- 漢堡按鈕 -->
+      <button id="hamburger-btn" class="hamburger" style="display:none;" onclick="toggleSidebar()">☰</button>
+      <div class="nav-title">亞東紀念醫院藥學部</div>
+    </div>
+    <div class="nav-user" id="user-info-display" style="display:none;">
+      <span id="display-name"></span> (<span id="display-role"></span>)
+    </div>
+  </header>
+
+  <!-- 左側伸縮選單 (Sidebar) -->
+  <nav id="sidebar" class="sidebar">
+    <div class="sidebar-content">
+      <button onclick="backToDashboard()" class="nav-btn" id="tab-dashboard">📝 學習護照</button>
+      <button onclick="openAnalytics()" class="nav-btn" id="tab-analytics">📊 學習分析</button>
+      <button onclick="logout()" class="nav-btn btn-logout" style="margin-top:auto;">登出系統</button>
+    </div>
+  </nav>
+
+  <!-- 主內容區 -->
+  <main class="main-container" id="main-content">
+    
+    <!-- 登入區塊 (包含裝置選擇) -->
+    <div id="view-login" class="view-section active">
+      <div class="login-card">
+        <h2>系統登入</h2>
+        <input type="text" id="login-empid" placeholder="請輸入員工編號 (如: F3598)" />
+        
+        <!-- 登入模式選擇 -->
+        <div class="device-toggle">
+          <label><input type="radio" name="device-mode" value="web" checked> 💻 網頁版 (RWD)</label>
+          <label><input type="radio" name="device-mode" value="mobile"> 📱 手機版 (操作優化)</label>
+        </div>
+
+        <button onclick="handleLogin()" id="btn-login" class="btn-primary">登入系統</button>
+      </div>
+    </div>
+
+    <!-- 儀表板、表單、分析區塊結構與原先相同，移至此處... -->
+    
+  </main>
+
+  <!-- 模組化載入 JS -->
+  <script src="js/api.js"></script>
+  <script src="js/layout.js"></script>
+  <script src="js/auth.js"></script>
+  <script src="js/dashboard.js"></script>
+  <script src="js/form.js"></script>
+  <script src="js/analytics.js"></script>
+</body>
+</html>
