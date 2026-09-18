@@ -43,7 +43,8 @@ function renderForm(response) {
   // 🌟 判斷是否為接收方 (被指派回填的人)
   const isReceiver = (currentTaskStatus === '待學生回填' || currentTaskStatus === '待老師回填');
   // 如果是發起者，才需要檢核有沒有按下評核鎖定
-  const needsAssLock = !isReceiver && timerStates.ass.elapsed === 0 && !timerStates.ass.isRunning;
+  const hasExistingTime = currentSavedAnswers['time_assessment'] && currentSavedAnswers['time_assessment'].trim() !== "";
+  const needsAssLock = !isStudentUser && timerStates.ass.elapsed === 0 && !timerStates.ass.isRunning && !hasExistingTime;
 
   const todayObj = new Date();
   const defaultTodayStr = new Date(todayObj.getTime() - todayObj.getTimezoneOffset() * 60000).toISOString().split('T')[0];
