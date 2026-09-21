@@ -34,18 +34,39 @@ body.sidebar-open .main-container { margin-left: calc(var(--sidebar-width) + 20p
 .req { color: #e11d48; margin-left: 4px; }
 select, textarea, input[type="text"], input[type="date"], input[type="time"], input[type="datetime-local"] { width: 100%; box-sizing: border-box; padding: 12px 15px; margin-top: 12px; border: 2px solid var(--border-color); border-radius: 8px; font-family: inherit; font-size: 15px; outline: none; background-color: #f8fafc; }
 label { display: flex; align-items: center; margin: 12px 0; cursor: pointer; padding: 10px 15px; border-radius: 8px; border: 1px solid transparent; transition: 0.2s; }
-.btn-primary { background: var(--primary-color); color: white; border: none; padding: 14px 28px; border-radius: 8px; font-size: 16px; font-weight: bold; cursor: pointer; width: 100%; margin-top: 15px; }
-.login-card .btn-secondary {
-    background-color: #ffffff;
-    color: var(--primary-color);
-    border: 2px solid var(--primary-color);
-    font-weight: bold;
-    transition: 0.3s;
-  }
-  .login-card .btn-secondary:hover {
-    background-color: var(--primary-color);
-    color: #ffffff;
-  }
+/* 移除舊有的 .login-card .btn-secondary 與舊的 .btn-primary */
+
+/* 🌟 重新定義全域按鈕樣式 */
+.btn-primary { 
+  background: var(--primary-color); 
+  color: white; 
+  border: none; 
+  padding: 12px 24px; 
+  border-radius: 8px; 
+  font-size: 16px; 
+  font-weight: bold; 
+  cursor: pointer; 
+  transition: 0.3s; 
+  box-sizing: border-box; 
+}
+.btn-primary:hover { opacity: 0.9; }
+
+.btn-secondary { 
+  background-color: #ffffff; 
+  color: var(--primary-color); 
+  border: 2px solid var(--primary-color); 
+  padding: 12px 24px; 
+  border-radius: 8px; 
+  font-size: 16px; 
+  font-weight: bold; 
+  cursor: pointer; 
+  transition: 0.3s; 
+  box-sizing: border-box; 
+}
+.btn-secondary:hover { 
+  background-color: var(--primary-color); 
+  color: #ffffff; 
+}
 .status-badge { font-size: 12px; padding: 4px 10px; border-radius: 20px; font-weight: bold; margin-left: 10px; }
 .status-draft { background: #fff3cd; color: #856404; }
 .status-pending { background: #cce5ff; color: #004085; }
