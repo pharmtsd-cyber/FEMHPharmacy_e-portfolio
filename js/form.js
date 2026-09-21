@@ -371,3 +371,10 @@ async function submitExamHandler(actionType) {
     if(returnBtn) { returnBtn.disabled = false; returnBtn.innerText = "退回修改 (解鎖)"; }
   }
 }
+
+function safeSetInnerText(elementId, text) {
+  const el = document.getElementById(elementId);
+  if (el) {
+    el.innerText = text;
+  }
+}
