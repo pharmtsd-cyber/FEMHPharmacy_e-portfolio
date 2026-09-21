@@ -52,7 +52,7 @@ async function openForm(templateId) {
 }
 
 // ==========================================
-// 2. 表單渲染核心邏輯
+// 2. 表單渲染核心邏輯 (支援上下兩段式排版)
 // ==========================================
 function renderForm(response) {
   const data = response.data;
@@ -66,7 +66,6 @@ function renderForm(response) {
   const isReceiver = (currentTaskStatus === '待學生回填' || currentTaskStatus === '待老師回填');
   const isStudentReturned = (!isStudentUser && currentTaskStatus === '老師暫存' && currentSavedAnswers['is_returned'] === 'true');
   
-  // 初始化計時器秒數 (從文字轉回秒數，以便接續計時)
   if (!timerStates['ass'].elapsed && currentSavedAnswers['time_assessment']) {
     timerStates['ass'].elapsed = parseTimeToSeconds(currentSavedAnswers['time_assessment']);
   }
@@ -108,18 +107,14 @@ function renderForm(response) {
       <h3 style="margin-top:0;">📅 評核日期</h3>
       <input type="date" name="assessment_date" value="${savedAssessmentDate}" required ${disableBasicInfo}>
     </div>
-    
     <div class="question-block" style="flex:2; border-left: 5px solid var(--primary-color); padding: 15px; margin-bottom:0;">
       <h3 style="margin-top:0;">👤 受評學員</h3>
       <input type="text" name="native_student" id="native-student-input" list="native-student-list" value="${currentSavedAnswers['native_student'] || ''}" placeholder="請搜尋..." required ${disableBasicInfo} autocomplete="off" onchange="updateAttemptCount()">
       <datalist id="native-student-list">`;
-      
   globalUserList.forEach(u => { html += `<option value="${u.empId} - ${u.name}"></option>`; });
-  
   html += `</datalist>
       <div id="attempt-count-display" style="margin-top:10px; font-size:14px; color:#e11d48; font-weight:bold;"></div>
     </div>
-    
     <div class="question-block" style="flex:1.5; border-left: 5px solid var(--primary-color); padding: 15px; margin-bottom:0;">
       <h3 style="margin-top:0;">🎓 學員身分</h3>
       <select name="native_student_role" id="native-student-role" required ${disableBasicInfo}>
@@ -131,22 +126,16 @@ function renderForm(response) {
     </div>
   </div>`;
 
-  // --- 計時控制區塊 ---
-html += `<div class="floating-timer-panel"><h3 style="margin-top:0; color: var(--secondary-color);">⏳ 計時控制</h3>`;
-  
+  // --- 上半部：評核計時區塊 ---
+  html += `<div class="floating-timer-panel"><h3 style="margin-top:0; color: var(--primary-color);">⏳ 第一階段：評核計時</h3>`;
   if (isReceiver || isStudentReturned) {
-    html += `<div style="margin-bottom:10px; font-size:15px; color:#444;"><strong>評核花費時間：</strong> ${currentSavedAnswers['time_assessment'] || '無紀錄'}</div>`;
-    if (!isEPA) {
-      html += `<div style="font-size:15px; color:#444;"><strong>雙向回饋時間：</strong> ${currentSavedAnswers['time_feedback'] || '無紀錄'}</div>`;
-    }
+    html += `<div style="margin-bottom:0; font-size:15px; color:#444;"><strong>評核花費時間：</strong> ${currentSavedAnswers['time_assessment'] || '無紀錄'}</div>`;
   } else {
-    // 🌟 動態判斷按鈕與提示文字：如果有時間紀錄就顯示「接續」與「已記錄：XX分XX秒」
     const assTimeStr = currentSavedAnswers['time_assessment'] || '';
     const assBtnText = assTimeStr ? '▶ 接續評核' : '▶ 評核開始';
     const assStatusText = assTimeStr ? `已記錄: ${assTimeStr}` : '未開始';
-
     html += `
-    <div class="timer-row" style="border-bottom:${isEPA ? 'none' : '1px solid #eee'}; margin-bottom:${isEPA ? '0' : '10px'}; padding-bottom:${isEPA ? '0' : '10px'};">
+    <div class="timer-row" style="border-bottom:none; margin-bottom:0; padding-bottom:0;">
       <button type="button" id="btn-ass" class="btn-secondary" onclick="toggleTimer('ass', '評核')" style="width:100%;">${assBtnText}</button>
       <div style="display:flex; justify-content:space-between; margin-top:8px;">
         <span id="text-ass" style="color:${assTimeStr ? '#0284c7' : '#666'}; font-weight:${assTimeStr ? 'bold' : 'normal'};">${assStatusText}</span>
@@ -154,35 +143,28 @@ html += `<div class="floating-timer-panel"><h3 style="margin-top:0; color: var(-
       </div>
       <input type="hidden" name="time_assessment" id="val_ass" value="${assTimeStr}">
     </div>`;
-    
-    if (!isEPA) {
-      const fbTimeStr = currentSavedAnswers['time_feedback'] || '';
-      const fbBtnText = fbTimeStr ? '▶ 接續雙向回饋' : '▶ 雙向回饋開始';
-      const fbStatusText = fbTimeStr ? `已記錄: ${fbTimeStr}` : '未開始';
-
-      html += `
-      <div class="timer-row" style="border-bottom:none; margin-bottom:0; padding-bottom:0;">
-        <button type="button" id="btn-fb" class="btn-secondary" onclick="toggleTimer('fb', '雙向回饋')" style="width:100%;">${fbBtnText}</button>
-        <div style="display:flex; justify-content:space-between; margin-top:8px;">
-          <span id="text-fb" style="color:${fbTimeStr ? '#0284c7' : '#666'}; font-weight:${fbTimeStr ? 'bold' : 'normal'};">${fbStatusText}</span>
-          <a href="javascript:void(0)" onclick="resetTimer('fb')">重置</a>
-        </div>
-        <input type="hidden" name="time_feedback" id="val_fb" value="${fbTimeStr}">
-      </div>`;
-    }
   }
   html += `</div>`;
 
-  // --- 動態題目迴圈區塊 ---
-  data.questions.forEach(q => {
-    if (q.type === 'heading') { html += `<h3>${q.question}</h3>`; return; }
-    
+  // 🌟 自動分割題目：找出「整體評價、滿意度、心得」來作為雙向回饋區塊的分界點
+  let splitIndex = data.questions.findIndex(q => 
+    q.question.includes('整體評價') || 
+    q.question.includes('滿意度') || 
+    q.question.includes('心得')
+  );
+  if (splitIndex === -1) splitIndex = data.questions.length; // 若無匹配則全部分在第一段
+
+  const part1Questions = data.questions.slice(0, splitIndex);
+  const part2Questions = data.questions.slice(splitIndex);
+
+  // 獨立出產生題目 HTML 的工具函式
+  const generateQuestionHtml = (q) => {
+    if (q.type === 'heading') return `<h3>${q.question}</h3>`;
     let canEdit = true;
     if (q.targetRole) {
       if (isStudentUser && !q.targetRole.includes('學生')) canEdit = false;
       if (!isStudentUser && !q.targetRole.includes('教師')) canEdit = false;
     }
-    
     const inputClass = canEdit ? 'teacher-input' : '';
     const disableInput = !canEdit || (needsAssLock && canEdit);
     const reqAttr = (q.required && canEdit && !disableInput) ? 'required' : '';
@@ -190,32 +172,58 @@ html += `<div class="floating-timer-panel"><h3 style="margin-top:0; color: var(-
     const bgStyle = !canEdit ? 'background-color: #f8fafc; border-left: 4px solid #94a3b8;' : '';
     const badgeHtml = !canEdit ? '<span class="status-badge status-pending" style="margin-left:8px;">唯讀</span>' : '';
     
-    html += `<div class="question-block" style="${bgStyle}"><h4>${q.question} ${badgeHtml}</h4>`;
+    let qHtml = `<div class="question-block" style="${bgStyle}"><h4>${q.question} ${badgeHtml}</h4>`;
     let savedVal = currentSavedAnswers[q.questionId] || "";
 
     if (q.type === 'select') {
-      html += `<select name="${q.questionId}" class="${inputClass}" ${reqAttr} ${disabledAttr}><option value="">請選擇</option>`;
-      q.options.forEach(opt => { html += `<option value="${opt}" ${savedVal === opt ? 'selected' : ''}>${opt}</option>`; });
-      html += `</select>`;
+      qHtml += `<select name="${q.questionId}" class="${inputClass}" ${reqAttr} ${disabledAttr}><option value="">請選擇</option>`;
+      q.options.forEach(opt => { qHtml += `<option value="${opt}" ${savedVal === opt ? 'selected' : ''}>${opt}</option>`; });
+      qHtml += `</select>`;
     } else if (q.type === 'radio') {
-      q.options.forEach(opt => { html += `<label><input type="radio" name="${q.questionId}" class="${inputClass}" value="${opt}" ${reqAttr} ${disabledAttr} ${savedVal === opt ? 'checked' : ''}> ${opt}</label>`; });
+      q.options.forEach(opt => { qHtml += `<label><input type="radio" name="${q.questionId}" class="${inputClass}" value="${opt}" ${reqAttr} ${disabledAttr} ${savedVal === opt ? 'checked' : ''}> ${opt}</label>`; });
     } else if (q.type === 'checkbox') {
-      // 將字串轉回陣列，以便比對哪些選項已被勾選
       const savedArr = savedVal ? savedVal.toString().split(',') : [];
       q.options.forEach(opt => { 
-        // 判斷該選項是否在已儲存的陣列中
         const isChecked = savedArr.includes(opt) ? 'checked' : '';
-        // 為了避免原生 HTML5 阻擋（若設為 required 會要求所有選項都要勾），這裡刻意不加上 reqAttr
-        html += `<label><input type="checkbox" name="${q.questionId}" class="${inputClass}" value="${opt}" ${disabledAttr} ${isChecked}> ${opt}</label>`; 
+        qHtml += `<label><input type="checkbox" name="${q.questionId}" class="${inputClass}" value="${opt}" ${disabledAttr} ${isChecked}> ${opt}</label>`; 
       });
     } else if (q.type === 'text') {
-      html += `<textarea name="${q.questionId}" class="${inputClass}" ${reqAttr} ${disabledAttr}>${savedVal}</textarea>`;
+      qHtml += `<textarea name="${q.questionId}" class="${inputClass}" ${reqAttr} ${disabledAttr}>${savedVal}</textarea>`;
+    }
+    qHtml += `</div>`;
+    return qHtml;
+  };
+
+  // --- 繪製上半部題目 (評核項目) ---
+  part1Questions.forEach(q => { html += generateQuestionHtml(q); });
+
+  // --- 中段：雙向回饋計時區塊 (僅在非 EPA 且有回饋題目時顯示) ---
+  if (!isEPA && part2Questions.length > 0) {
+    html += `<div class="floating-timer-panel" style="margin-top: 40px; border: 2px solid var(--secondary-color);"><h3 style="margin-top:0; color: var(--secondary-color);">💬 第二階段：雙向回饋計時</h3>`;
+    if (isReceiver || isStudentReturned) {
+      html += `<div style="margin-bottom:0; font-size:15px; color:#444;"><strong>雙向回饋時間：</strong> ${currentSavedAnswers['time_feedback'] || '無紀錄'}</div>`;
+    } else {
+      const fbTimeStr = currentSavedAnswers['time_feedback'] || '';
+      const fbBtnText = fbTimeStr ? '▶ 接續雙向回饋' : '▶ 雙向回饋開始';
+      const fbStatusText = fbTimeStr ? `已記錄: ${fbTimeStr}` : '未開始';
+      html += `
+      <div class="timer-row" style="border-bottom:none; margin-bottom:0; padding-bottom:0;">
+        <button type="button" id="btn-fb" class="btn-secondary" onclick="toggleTimer('fb', '雙向回饋')" style="width:100%; border-color: var(--secondary-color); color: var(--secondary-color);">${fbBtnText}</button>
+        <div style="display:flex; justify-content:space-between; margin-top:8px;">
+          <span id="text-fb" style="color:${fbTimeStr ? '#0284c7' : '#666'}; font-weight:${fbTimeStr ? 'bold' : 'normal'};">${fbStatusText}</span>
+          <a href="javascript:void(0)" onclick="resetTimer('fb')">重置</a>
+        </div>
+        <input type="hidden" name="time_feedback" id="val_fb" value="${fbTimeStr}">
+      </div>`;
     }
     html += `</div>`;
-  });
+  }
+
+  // --- 繪製下半部題目 (滿意度與心得項目) ---
+  part2Questions.forEach(q => { html += generateQuestionHtml(q); });
 
   // --- 簽名與按鈕區塊 ---
-  html += `<div class="question-block"><h3>✍️ 簽名區塊</h3><div style="display:flex; gap:20px; flex-wrap:wrap;">`;
+  html += `<div class="question-block" style="margin-top: 30px;"><h3>✍️ 簽名區塊</h3><div style="display:flex; gap:20px; flex-wrap:wrap;">`;
   if (isEPA) {
     if (isStudentUser) {
       const tSigImg = currentSavedAnswers.teacherSignature || '';
@@ -240,7 +248,6 @@ html += `<div class="floating-timer-panel"><h3 style="margin-top:0; color: var(-
     const draftBtnText = isStudentUser ? "學生存檔(暫存)" : "教師存檔(暫存)";
     const submitBtnText = isStudentUser ? "通知教師完成(完稿)" : "送出給學生確認";
     const draftBtnHtml = isReceiver ? '' : `<button type="button" id="btn-draft" class="btn-secondary" style="flex:1;" onclick="submitExamHandler('draft')">${draftBtnText}</button>`;
-    
     html += `
       <div style="display: flex; gap: 15px;">
         ${draftBtnHtml}
@@ -248,10 +255,8 @@ html += `<div class="floating-timer-panel"><h3 style="margin-top:0; color: var(-
       </div></form>`;
   }
 
-  // 將組合好的 HTML 塞入畫面
   document.getElementById('questions-container').innerHTML = html;
   
-  // 延遲初始化畫布與次數，確保 DOM 已掛載
   setTimeout(() => { 
     setupCanvas('teacher-sig'); 
     setupCanvas('student-sig'); 
@@ -259,7 +264,6 @@ html += `<div class="floating-timer-panel"><h3 style="margin-top:0; color: var(-
   }, 100);
   
   autoSaveInterval = setInterval(saveLocalDraft, 3000);
-  
 }
 
 // ==========================================
