@@ -485,7 +485,14 @@ function saveLocalDraft() {
   const form = document.getElementById('dynamic-exam-form'); 
   if(!form) return;
   const formData = new FormData(form); 
-  const answers = Object.fromEntries(formData);
+  
+  // 🌟 改用迴圈處理，若是同名陣列(多選)則用逗號分隔
+  const answers = {};
+  for (let [key, value] of formData.entries()) {
+    if (answers[key]) answers[key] += ',' + value;
+    else answers[key] = value;
+  }
+  
   localStorage.setItem(`draft_${currentUser.empId}_${currentTemplateId}`, JSON.stringify({ answers, timers: timerStates }));
 }
 
