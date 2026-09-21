@@ -199,6 +199,15 @@ html += `<div class="floating-timer-panel"><h3 style="margin-top:0; color: var(-
       html += `</select>`;
     } else if (q.type === 'radio') {
       q.options.forEach(opt => { html += `<label><input type="radio" name="${q.questionId}" class="${inputClass}" value="${opt}" ${reqAttr} ${disabledAttr} ${savedVal === opt ? 'checked' : ''}> ${opt}</label>`; });
+    } else if (q.type === 'checkbox') {
+      // 將字串轉回陣列，以便比對哪些選項已被勾選
+      const savedArr = savedVal ? savedVal.toString().split(',') : [];
+      q.options.forEach(opt => { 
+        // 判斷該選項是否在已儲存的陣列中
+        const isChecked = savedArr.includes(opt) ? 'checked' : '';
+        // 為了避免原生 HTML5 阻擋（若設為 required 會要求所有選項都要勾），這裡刻意不加上 reqAttr
+        html += `<label><input type="checkbox" name="${q.questionId}" class="${inputClass}" value="${opt}" ${disabledAttr} ${isChecked}> ${opt}</label>`; 
+      });
     } else if (q.type === 'text') {
       html += `<textarea name="${q.questionId}" class="${inputClass}" ${reqAttr} ${disabledAttr}>${savedVal}</textarea>`;
     }
