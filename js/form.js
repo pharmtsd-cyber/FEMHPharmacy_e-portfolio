@@ -304,7 +304,11 @@ async function submitExamHandler(actionType) {
 
   // 組合資料
   const formData = new FormData(form);
-  const answers = Object.fromEntries(formData);
+  const answers = {};
+  for (let [key, value] of formData.entries()) {
+    if (answers[key]) answers[key] += ',' + value;
+    else answers[key] = value;
+  }
   const studentRaw = document.getElementById('native-student-input').value;
   answers['native_student'] = studentRaw;
 
