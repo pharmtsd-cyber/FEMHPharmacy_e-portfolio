@@ -1,15 +1,20 @@
 // ==========================================
+// 全域變數供摘要功能讀取
+// ==========================================
+window.currentQuestionsData = [];
+
+// ==========================================
 // 1. 表單初始化與載入
 // ==========================================
 async function openForm(templateId) {
   currentTemplateId = templateId;
+  window.currentQuestionsData = [];
   
   if (!currentRecordId) {
     currentSavedAnswers = {};
     currentAttemptCount = 0;
   }
 
-  // 重置計時器狀態
   if (timerRaf['ass']) cancelAnimationFrame(timerRaf['ass']);
   if (timerRaf['fb']) cancelAnimationFrame(timerRaf['fb']);
   timerStates['ass'] = { isRunning: false, start: null, elapsed: 0 };
@@ -18,7 +23,6 @@ async function openForm(templateId) {
   if (autoSaveInterval) clearInterval(autoSaveInterval);
   canvases = {};
 
-  // 檢查本機暫存 (Draft)
   const localKey = `draft_${currentUser.empId}_${templateId}`;
   const localData = localStorage.getItem(localKey);
   if (localData && !currentRecordId) {
@@ -30,7 +34,6 @@ async function openForm(templateId) {
     }
   }
 
-  // 切換畫面與載入動畫
   switchView('view-form');
   document.getElementById('view-form').innerHTML = `
     <button onclick="backToDashboard()" class="btn-secondary" style="margin-bottom: 20px; display: inline-block; padding: 8px 16px; width: auto;">← 返回主題列表</button>
@@ -40,7 +43,6 @@ async function openForm(templateId) {
     </div>
   `;
 
-  // 呼叫 API 取得題目
   const res = await callGAS('getTemplateData', { templateId, empId: currentUser.empId });
   if (res.status === 'error') { 
     alert("❌ " + res.message); 
@@ -52,14 +54,14 @@ async function openForm(templateId) {
 }
 
 // ==========================================
-// 2. 表單渲染核心邏輯 (支援上下兩段式排版)
+// 2. 表單渲染核心邏輯
 // ==========================================
 function renderForm(response) {
   const data = response.data;
   document.getElementById('form-title').innerText = data.title;
 
-  // --- 權限與狀態判斷 ---
   const isEPA = data.title.toUpperCase().includes('EPA');
+  const isDOPS = data.title.toUpperCase().includes('DOPS');
   const userRolesStr = [currentUser.role, currentUser.specialRole].filter(Boolean).join(' ');
   const isStudentUser = userRolesStr.includes('學生') || userRolesStr.includes('實習生');
   
@@ -146,16 +148,17 @@ function renderForm(response) {
   }
   html += `</div>`;
 
-  // 🌟 自動分割題目：找出「整體評價、滿意度、心得」來作為雙向回饋區塊的分界點
+  // 分割題目
   let splitIndex = data.questions.findIndex(q => 
     q.question.includes('整體評價') || 
     q.question.includes('滿意度') || 
     q.question.includes('心得')
   );
-  if (splitIndex === -1) splitIndex = data.questions.length; // 若無匹配則全部分在第一段
+  if (splitIndex === -1) splitIndex = data.questions.length; 
 
-  const part1Questions = data.questions.slice(0, splitIndex);
-  const part2Questions = data.questions.slice(splitIndex);
+  const part1Questions = data.questions.slice(0, splitIndex).map(q => ({...q, isPart1: true}));
+  const part2Questions = data.questions.slice(splitIndex).map(q => ({...q, isPart1: false}));
+  window.currentQuestionsData = [...part1Questions, ...part2Questions];
 
   // 獨立出產生題目 HTML 的工具函式
   const generateQuestionHtml = (q) => {
@@ -190,14 +193,31 @@ function renderForm(response) {
     } else if (q.type === 'text') {
       qHtml += `<textarea name="${q.questionId}" class="${inputClass}" ${reqAttr} ${disabledAttr}>${savedVal}</textarea>`;
     }
+
+    // 🌟 在第一階段的 DOPS 題目下方加入「老師筆記欄」
+    if (isDOPS && q.isPart1 && canEdit && q.type !== 'text') {
+      const noteVal = currentSavedAnswers[`${q.questionId}_note`] || "";
+      qHtml += `<input type="text" name="${q.questionId}_note" class="${inputClass}" placeholder="✏️ 教師快速備註 (如：哪裡做得好、哪裡做錯)..." value="${noteVal}" style="margin-top:15px; border: 1px dashed #94a3b8; background: #fff;" ${disabledAttr}>`;
+    }
+
     qHtml += `</div>`;
     return qHtml;
   };
 
-  // --- 繪製上半部題目 (評核項目) ---
+  // --- 繪製上半部題目 ---
   part1Questions.forEach(q => { html += generateQuestionHtml(q); });
 
-  // --- 中段：雙向回饋計時區塊 (僅在非 EPA 且有回饋題目時顯示) ---
+  // 🌟 階段切換按鈕 (過渡到第二段)
+  if (!isEPA && part2Questions.length > 0 && !isReceiver && !isStudentReturned) {
+    html += `
+    <div style="text-align:center; margin: 30px 0; border-top: 2px dashed #cbd5e1; padding-top: 25px;">
+        <button type="button" class="btn-secondary" style="background:#f1f5f9; border-color:#94a3b8; color:#475569;" onclick="pauseAssTimer()">
+          ⏸️ 暫停上方評核計時，準備進入第二階段
+        </button>
+    </div>`;
+  }
+
+  // --- 中段：雙向回饋計時與智慧摘要區塊 ---
   if (!isEPA && part2Questions.length > 0) {
     html += `<div class="floating-timer-panel" style="margin-top: 40px; border: 2px solid var(--secondary-color);"><h3 style="margin-top:0; color: var(--secondary-color);">💬 第二階段：雙向回饋計時</h3>`;
     if (isReceiver || isStudentReturned) {
@@ -217,9 +237,30 @@ function renderForm(response) {
       </div>`;
     }
     html += `</div>`;
+
+    // 🌟 智慧摘要草稿產生區塊 (僅老師可見)
+    if (isDOPS && !isStudentUser) {
+      html += `
+      <div class="question-block" style="background: #f8fafc; border: 1px solid #e2e8f0; margin-top: 20px;">
+        <h3 style="margin-top:0; color:#334155;">🤖 智慧摘要 (協助填寫回饋)</h3>
+        <p style="font-size: 14px; color: #64748b; margin-top:0;">點擊下方按鈕，系統將自動彙整您的評分與筆記，分列為「表現良好」與「待改進」，方便您複製至下方的評語欄位中。</p>
+        <button type="button" class="btn-secondary" style="padding: 8px 16px; margin-bottom: 15px;" onclick="generateAISummary()">產生 / 更新 摘要</button>
+        
+        <div style="display:flex; gap:15px; flex-wrap:wrap;">
+          <div style="flex:1; min-width:250px; background:#f0fdf4; padding:15px; border-radius:8px; border:1px solid #bbf7d0;">
+            <h4 style="color:#166534; margin-top:0;">✅ 表現良好</h4>
+            <div id="ai-summary-good" style="white-space:pre-wrap; font-size:14px; color:#14532d; user-select:all; min-height:60px;">(尚未產生)</div>
+          </div>
+          <div style="flex:1; min-width:250px; background:#fef2f2; padding:15px; border-radius:8px; border:1px solid #fecaca;">
+            <h4 style="color:#991b1b; margin-top:0;">⚠️ 待改進事項</h4>
+            <div id="ai-summary-bad" style="white-space:pre-wrap; font-size:14px; color:#7f1d1d; user-select:all; min-height:60px;">(尚未產生)</div>
+          </div>
+        </div>
+      </div>`;
+    }
   }
 
-  // --- 繪製下半部題目 (滿意度與心得項目) ---
+  // --- 繪製下半部題目 ---
   part2Questions.forEach(q => { html += generateQuestionHtml(q); });
 
   // --- 簽名與按鈕區塊 ---
@@ -275,11 +316,9 @@ async function submitExamHandler(actionType) {
   const isStudentUser = userRolesStr.includes('學生') || userRolesStr.includes('實習生');
   const isEPA = document.getElementById('form-title').innerText.toUpperCase().includes('EPA');
 
-  // 自動暫停所有計時器
   if (timerStates['ass'] && timerStates['ass'].isRunning) toggleTimer('ass', '評核'); 
   if (timerStates['fb'] && timerStates['fb'].isRunning) toggleTimer('fb', '雙向回饋'); 
 
-  // 驗證表單必填與簽名
   if (actionType === 'submit') {
     if (!form.reportValidity()) return;
     if (isEPA) {
@@ -292,7 +331,6 @@ async function submitExamHandler(actionType) {
   
   if (autoSaveInterval) clearInterval(autoSaveInterval);
   
-  // 按鈕防呆鎖定
   const submitBtn = document.getElementById('btn-submit');
   const draftBtn = document.getElementById('btn-draft');
   const returnBtn = document.getElementById('btn-return');
@@ -306,7 +344,6 @@ async function submitExamHandler(actionType) {
   else if (actionType === 'return') returnBtn.innerText = "退回中...";
   else draftBtn.innerText = "暫存中...";
 
-  // 組合資料
   const formData = new FormData(form);
   const answers = {};
   for (let [key, value] of formData.entries()) {
@@ -316,7 +353,6 @@ async function submitExamHandler(actionType) {
   const studentRaw = document.getElementById('native-student-input').value;
   answers['native_student'] = studentRaw;
 
-  // 🌟 重要：寫入退回標記 (若學生點擊退回，或老師修改被退回的草稿時皆需保留)
   if (actionType === 'return') {
     answers['is_returned'] = 'true';
   } else if (actionType === 'draft' && currentSavedAnswers['is_returned'] === 'true') {
@@ -335,7 +371,6 @@ async function submitExamHandler(actionType) {
     studentSignature: (canvases['student-sig'] && !isCanvasBlank(canvases['student-sig'])) ? canvases['student-sig'].toDataURL() : ""
   };
 
-  // 傳送 API
   const res = await callGAS('submitExam', { payload });
   if (res.status === 'success') {
     alert("🎉 " + res.message);
@@ -343,7 +378,6 @@ async function submitExamHandler(actionType) {
     backToDashboard(); 
   } else {
     alert("錯誤：" + res.message);
-    // 發生錯誤，還原按鈕狀態
     submitBtn.disabled = false;
     submitBtn.innerText = ogText;
     if(draftBtn) { draftBtn.disabled = false; draftBtn.innerText = isStudentUser ? "學生存檔(暫存)" : "教師存檔(暫存)"; }
@@ -352,7 +386,7 @@ async function submitExamHandler(actionType) {
 }
 
 // ==========================================
-// 4. 計時器與其他工具函式
+// 4. 工具函式與計時器、畫布、摘要功能
 // ==========================================
 function updateAttemptCount() {
   const studentRaw = document.getElementById('native-student-input').value;
@@ -368,11 +402,8 @@ function updateAttemptCount() {
   }
 }
 
-function getStr(sec) { 
-  return `${Math.floor(sec / 60)}分${sec % 60}秒`; 
-}
+function getStr(sec) { return `${Math.floor(sec / 60)}分${sec % 60}秒`; }
 
-// 將時間字串轉換回秒數
 function parseTimeToSeconds(timeStr) {
   if (!timeStr) return 0;
   let m = 0, s = 0;
@@ -384,17 +415,11 @@ function parseTimeToSeconds(timeStr) {
 }
 
 function toggleTimer(type, label) {
-  // 防呆：沒填身分或受評者，不給解鎖評核計時
   if (type === 'ass' && !timerStates[type].isRunning) {
     const studentInput = document.getElementById('native-student-input');
     const roleInput = document.getElementById('native-student-role');
-    
-    if (studentInput && !studentInput.value.trim()) {
-      alert("⚠️ 請先選擇「受評學員」才能解鎖並開始評核！"); return; 
-    }
-    if (roleInput && !roleInput.value.trim()) {
-      alert("⚠️ 請先選擇「學員身分」才能解鎖並開始評核！"); return; 
-    }
+    if (studentInput && !studentInput.value.trim()) return alert("⚠️ 請先選擇「受評學員」才能解鎖並開始評核！"); 
+    if (roleInput && !roleInput.value.trim()) return alert("⚠️ 請先選擇「學員身分」才能解鎖並開始評核！"); 
   }
 
   if (!timerStates[type].isRunning) {
@@ -430,7 +455,7 @@ function toggleTimer(type, label) {
 function updateTimerUI(type, label = "") {
   const timeStr = getStr(timerStates[type].elapsed);
   const btn = document.getElementById(`btn-${type}`);
-  if (btn) { btn.innerText = `▶ 接續${label}`; btn.style.background = ''; btn.style.color = ''; }
+  if (btn) { btn.innerText = `▶ 接續${label}`; btn.style.background = ''; btn.style.color = (type==='fb' ? 'var(--secondary-color)' : ''); }
   document.getElementById(`text-${type}`).innerText = `已記錄: ${timeStr}`; 
   document.getElementById(`val_${type}`).value = timeStr; 
 }
@@ -443,27 +468,61 @@ function resetTimer(type) {
     document.getElementById(`val_${type}`).value = "";
     document.getElementById(`text-${type}`).innerText = '未開始';
     const btn = document.getElementById(`btn-${type}`);
-    if(btn) { btn.innerText = `▶ 開始`; btn.style.background = ''; btn.style.color = ''; }
+    if(btn) { btn.innerText = `▶ 開始`; btn.style.background = ''; btn.style.color = (type==='fb' ? 'var(--secondary-color)' : ''); }
   }
 }
+
+// 🌟 階段切換：暫停評核，引導至雙向回饋
+window.pauseAssTimer = function() {
+  if (timerStates['ass'].isRunning) {
+    toggleTimer('ass', '評核');
+  }
+  document.getElementById('btn-fb').scrollIntoView({ behavior: 'smooth', block: 'center' });
+};
+
+// 🌟 自動產生總結摘要邏輯
+window.generateAISummary = function() {
+  const form = document.getElementById('dynamic-exam-form');
+  const formData = new FormData(form);
+  let goodText = "";
+  let badText = "";
+
+  window.currentQuestionsData.forEach(q => {
+    if (q.isPart1 && q.type !== 'heading') {
+      const ans = formData.getAll(q.questionId).join(', '); // 支援多選
+      const note = formData.get(`${q.questionId}_note`);
+      
+      if (ans || note) {
+        // 利用關鍵字簡易判斷好壞：包含「未符合」、「不」、「待改進」或是給低分 (1~4) 歸類為待改進
+        const isBad = /未符合|不|待|未完成/.test(ans) || ['1','2','3','4'].includes(ans); 
+        
+        let cleanQuestion = q.question.replace(/^\d+\./, '').trim(); // 移除題號
+        let line = `• ${cleanQuestion}`;
+        if (ans) line += `\n  👉 評比：${ans}`;
+        if (note) line += `\n  📝 備註：${note}`;
+        
+        if (isBad) badText += line + "\n\n";
+        else goodText += line + "\n\n";
+      }
+    }
+  });
+
+  document.getElementById('ai-summary-good').innerText = goodText.trim() || "(無紀錄)";
+  document.getElementById('ai-summary-bad').innerText = badText.trim() || "(無紀錄)";
+};
 
 // 畫布簽名工具
 function setupCanvas(id) {
   const canvas = document.getElementById(id); 
   if (!canvas || canvases[id]) return;
-  
   const ctx = canvas.getContext('2d'); 
   let isDrawing = false; 
   canvases[id] = canvas;
   
   const getPos = (e) => { 
     const r = canvas.getBoundingClientRect(); 
-    return { 
-      x: (e.clientX || e.touches[0].clientX) - r.left, 
-      y: (e.clientY || e.touches[0].clientY) - r.top 
-    }; 
+    return { x: (e.clientX || e.touches[0].clientX) - r.left, y: (e.clientY || e.touches[0].clientY) - r.top }; 
   };
-  
   const start = (e) => { isDrawing = true; const p = getPos(e); ctx.beginPath(); ctx.moveTo(p.x, p.y); };
   const draw = (e) => { if (!isDrawing) return; const p = getPos(e); ctx.lineTo(p.x, p.y); ctx.stroke(); };
   const end = () => { isDrawing = false; ctx.closePath(); };
@@ -475,36 +534,17 @@ function setupCanvas(id) {
   canvas.addEventListener('touchmove', (e)=>{ e.preventDefault(); draw(e); }); 
   canvas.addEventListener('touchend', end);
 }
-
-function clearCanvas(id) { 
-  const c = document.getElementById(id); 
-  if(c) c.getContext('2d').clearRect(0, 0, c.width, c.height); 
-}
-
-function isCanvasBlank(canvas) { 
-  if(!canvas) return true; 
-  const b = document.createElement('canvas'); 
-  b.width = canvas.width; 
-  b.height = canvas.height; 
-  return canvas.toDataURL() === b.toDataURL(); 
-}
+function clearCanvas(id) { const c = document.getElementById(id); if(c) c.getContext('2d').clearRect(0, 0, c.width, c.height); }
+function isCanvasBlank(canvas) { if(!canvas) return true; const b = document.createElement('canvas'); b.width = canvas.width; b.height = canvas.height; return canvas.toDataURL() === b.toDataURL(); }
 
 function saveLocalDraft() {
-  const form = document.getElementById('dynamic-exam-form'); 
-  if(!form) return;
+  const form = document.getElementById('dynamic-exam-form'); if(!form) return;
   const formData = new FormData(form); 
-  
-  // 🌟 改用迴圈處理，若是同名陣列(多選)則用逗號分隔
   const answers = {};
   for (let [key, value] of formData.entries()) {
     if (answers[key]) answers[key] += ',' + value;
     else answers[key] = value;
   }
-  
   localStorage.setItem(`draft_${currentUser.empId}_${currentTemplateId}`, JSON.stringify({ answers, timers: timerStates }));
 }
-
-function safeSetInnerText(elementId, text) {
-  const el = document.getElementById(elementId);
-  if (el) { el.innerText = text; }
-}
+function safeSetInnerText(elementId, text) { const el = document.getElementById(elementId); if (el) { el.innerText = text; } }
