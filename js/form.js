@@ -83,7 +83,6 @@ function renderForm(response) {
 
   let html = `<p style="color: #666; margin-bottom: 20px;">${data.description}</p><form id="dynamic-exam-form">`;
 
-  // --- 頂部提示橫幅 ---
   if (isReceiver) {
     html += `
       <div style="background:#e0f2fe; border-left:5px solid #0284c7; padding:15px; margin-bottom:20px; border-radius:4px;">
@@ -102,7 +101,6 @@ function renderForm(response) {
 
   const disableBasicInfo = (isReceiver || isStudentReturned) ? 'disabled="true"' : '';
 
-  // --- 基本資料區塊 ---
   html += `
   <div style="display:flex; gap:15px; flex-wrap:wrap; margin-bottom: 20px;">
     <div class="question-block" style="flex:1; border-left: 5px solid var(--primary-color); padding: 15px; margin-bottom:0;">
@@ -128,7 +126,6 @@ function renderForm(response) {
     </div>
   </div>`;
 
-  // --- 上半部：評核計時區塊 ---
   html += `<div class="floating-timer-panel"><h3 style="margin-top:0; color: var(--primary-color);">⏳ 第一階段：評核計時</h3>`;
   if (isReceiver || isStudentReturned) {
     html += `<div style="margin-bottom:0; font-size:15px; color:#444;"><strong>評核花費時間：</strong> ${currentSavedAnswers['time_assessment'] || '無紀錄'}</div>`;
@@ -148,7 +145,6 @@ function renderForm(response) {
   }
   html += `</div>`;
 
-  // 分割題目
   let splitIndex = data.questions.findIndex(q => 
     q.question.includes('整體評價') || 
     q.question.includes('滿意度') || 
@@ -190,6 +186,17 @@ function renderForm(response) {
         qHtml += `<label><input type="checkbox" name="${q.questionId}" class="${inputClass}" value="${opt}" ${disabledAttr} ${isChecked}> ${opt}</label>`; 
       });
     } else if (q.type === 'text') {
+      // 🌟 若為摘要題，自動分割出「唯讀 AI 摘要」與「老師手動輸入」兩區塊
+      if (['COM_DOPS_03', 'COM_DOPS_04', 'COM_DOPS_05'].includes(q.questionId) && canEdit) {
+        let aiSavedVal = currentSavedAnswers[`${q.questionId}_ai`] || "";
+        qHtml += `
+          <div style="margin-bottom: 15px;">
+            <div style="font-size: 13px; color: #0284c7; margin-bottom: 4px; font-weight: bold;">🤖 系統整理摘要 (唯讀)：</div>
+            <textarea name="${q.questionId}_ai" class="${inputClass}" readonly style="background-color: #f1f5f9; border: 1px dashed #cbd5e1; color: #475569; min-height: 80px;" ${disabledAttr}>${aiSavedVal}</textarea>
+          </div>
+          <div style="font-size: 13px; color: #16a34a; margin-bottom: 4px; font-weight: bold;">✏️ 您的補充評語 (可手動修改儲存)：</div>
+        `;
+      }
       qHtml += `<textarea name="${q.questionId}" class="${inputClass}" ${reqAttr} ${disabledAttr}>${savedVal}</textarea>`;
     }
 
@@ -202,10 +209,8 @@ function renderForm(response) {
     return qHtml;
   };
 
-  // --- 繪製上半部題目 ---
   part1Questions.forEach(q => { html += generateQuestionHtml(q); });
 
-  // 🌟 階段切換按鈕 (中段過渡區塊)
   if (!isEPA && part2Questions.length > 0 && !isReceiver && !isStudentReturned) {
     const assTimeStr = currentSavedAnswers['time_assessment'] || '';
     const assMidBtnText = assTimeStr ? '▶ 接續評核計時' : '⏸️ 暫停評核計時';
@@ -220,7 +225,6 @@ function renderForm(response) {
     </div>`;
   }
 
-  // --- 中段：雙向回饋計時與智慧摘要區塊 ---
   if (!isEPA && part2Questions.length > 0) {
     html += `<div class="floating-timer-panel" style="margin-top: 40px; border: 2px solid var(--secondary-color);"><h3 style="margin-top:0; color: var(--secondary-color);">💬 第二階段：雙向回饋計時</h3>`;
     if (isReceiver || isStudentReturned) {
@@ -241,14 +245,13 @@ function renderForm(response) {
     }
     html += `</div>`;
 
-    // 🌟 智慧摘要小幫手區塊 (僅老師可見，精簡設計)
     if (isDOPS && !isStudentUser) {
       html += `
       <div class="question-block" style="background: #f8fafc; border: 1px solid #e2e8f0; margin-top: 20px; padding: 15px;">
         <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
           <div>
             <h3 style="margin:0; color:#334155;">🤖 智慧摘要小幫手</h3>
-            <p style="font-size: 14px; color: #64748b; margin: 5px 0 0 0;">點擊按鈕，系統將自動彙整您的評分與筆記，寫入下方的「表現良好」、「建議加強」與「未評核」欄位中。</p>
+            <p style="font-size: 14px; color: #64748b; margin: 5px 0 0 0;">點擊按鈕，系統將自動彙整您的評分與筆記，寫入下方的「唯讀摘要」區塊中供您參考補充。</p>
           </div>
           <button type="button" class="btn-secondary" style="padding: 8px 16px; background-color: #fff; border-color: #0284c7; color: #0284c7;" onclick="generateAISummary()">產生 / 更新 智慧摘要</button>
         </div>
@@ -256,10 +259,8 @@ function renderForm(response) {
     }
   }
 
-  // --- 繪製下半部題目 ---
   part2Questions.forEach(q => { html += generateQuestionHtml(q); });
 
-  // --- 簽名與按鈕區塊 ---
   html += `<div class="question-block" style="margin-top: 30px;"><h3>✍️ 簽名區塊</h3><div style="display:flex; gap:20px; flex-wrap:wrap;">`;
   if (isEPA) {
     if (isStudentUser) {
@@ -422,12 +423,10 @@ function toggleTimer(type, label) {
     timerStates[type].start = Date.now(); 
     timerStates[type].isRunning = true;
     
-    // 頂部按鈕狀態
     document.getElementById(`btn-${type}`).innerText = `■ 停止${label}`;
     document.getElementById(`btn-${type}`).style.background = '#e11d48';
     document.getElementById(`btn-${type}`).style.color = 'white';
     
-    // 中段過渡區按鈕狀態同步
     const midBtn = document.getElementById(`btn-${type}-mid`);
     if (midBtn) {
       midBtn.innerText = `■ 停止${label}`;
@@ -491,13 +490,12 @@ function resetTimer(type) {
   }
 }
 
-// 🌟 暫存並產生智慧摘要組合技
 window.generateAndDraft = async function() {
-  generateAISummary(false); // 先產生摘要 (不跳提示框)
-  await submitExamHandler('draft'); // 再觸發存檔
+  generateAISummary(false); 
+  await submitExamHandler('draft'); 
 };
 
-// 🌟 自動產生總結摘要邏輯 (寫入 Textarea)
+// 🌟 智慧摘要 (寫入隱藏的 _ai 唯讀框)
 window.generateAISummary = function(showAlert = true) {
   const form = document.getElementById('dynamic-exam-form');
   const formData = new FormData(form);
@@ -507,42 +505,61 @@ window.generateAISummary = function(showAlert = true) {
 
   window.currentQuestionsData.forEach(q => {
     if (q.isPart1 && q.type !== 'heading') {
-      const ans = formData.getAll(q.questionId).join(', ').trim(); // 支援多選
       const note = formData.get(`${q.questionId}_note`) || "";
+      let cleanQuestion = q.question.replace(/^\d+\./, '').trim(); 
       
-      let cleanQuestion = q.question.replace(/^\d+\./, '').trim(); // 移除題號
-      
-      if (!ans && !note.trim()) {
-        // 完全沒填寫、沒備註 -> 歸類至未評核
-        notAssessedText += `• ${cleanQuestion}\n`;
-      } else {
-        let line = `• ${cleanQuestion}`;
-        if (ans) line += `\n  👉 評比：${ans}`;
-        if (note.trim()) line += `\n  📝 備註：${note.trim()}`;
-        
-        // 判斷好壞 (包含「未符合、待改進」或低分數 1~4)
-        const isBad = /未符合|不|待|未完成/.test(ans) || ['1','2','3','4'].includes(ans); 
-        
-        if (isBad) badText += line + "\n\n";
-        else goodText += line + "\n\n";
+      // 🌟 針對 Checkbox 的特殊分流
+      if (q.type === 'checkbox') {
+        const checkedArr = formData.getAll(q.questionId);
+        const allOptions = q.options || [];
+        const uncheckedArr = allOptions.filter(o => !checkedArr.includes(o));
+
+        if (checkedArr.length === 0 && !note.trim()) {
+           // 完全沒勾選且沒備註 -> 未評核
+           notAssessedText += `• ${cleanQuestion}\n`;
+        } else {
+           if (checkedArr.length > 0) {
+             let line = `• ${cleanQuestion}\n  ✅ 已做到：${checkedArr.join(', ')}`;
+             if (note.trim()) line += `\n  📝 備註：${note.trim()}`;
+             goodText += line + "\n\n";
+           }
+           if (uncheckedArr.length > 0) {
+             let line = `• ${cleanQuestion}\n  ❌ 未做到 (建議加強)：${uncheckedArr.join(', ')}`;
+             if (note.trim() && checkedArr.length === 0) line += `\n  📝 備註：${note.trim()}`;
+             badText += line + "\n\n";
+           }
+        }
+      } 
+      // 🌟 一般題型 (單選/下拉)
+      else {
+        const ans = formData.getAll(q.questionId).join(', ').trim();
+        if (!ans && !note.trim()) {
+          notAssessedText += `• ${cleanQuestion}\n`;
+        } else {
+          let line = `• ${cleanQuestion}`;
+          if (ans) line += `\n  👉 評比：${ans}`;
+          if (note.trim()) line += `\n  📝 備註：${note.trim()}`;
+          
+          const isBad = /未符合|不|待|未完成/.test(ans) || ['1','2','3','4'].includes(ans); 
+          if (isBad) badText += line + "\n\n";
+          else goodText += line + "\n\n";
+        }
       }
     }
   });
 
-  // 直接寫入對應的 Textarea 中
-  const qGood = document.querySelector('[name="COM_DOPS_03"]');
-  const qBad = document.querySelector('[name="COM_DOPS_04"]');
-  const qNone = document.querySelector('[name="COM_DOPS_05"]');
+  // 寫入到帶有 _ai 的唯讀框
+  const qGoodAI = document.querySelector('[name="COM_DOPS_03_ai"]');
+  const qBadAI = document.querySelector('[name="COM_DOPS_04_ai"]');
+  const qNoneAI = document.querySelector('[name="COM_DOPS_05_ai"]');
   
-  if(qGood) qGood.value = goodText.trim();
-  if(qBad) qBad.value = badText.trim();
-  if(qNone) qNone.value = notAssessedText.trim();
+  if(qGoodAI) qGoodAI.value = goodText.trim();
+  if(qBadAI) qBadAI.value = badText.trim();
+  if(qNoneAI) qNoneAI.value = notAssessedText.trim();
 
-  // 若由按鈕手動觸發才跳出提示
-  if(showAlert) alert("✅ 智慧摘要已成功產生，並自動為您填寫至對應的文字框內！");
+  if(showAlert) alert("✅ 智慧摘要已成功更新！請查看下方題目的系統摘要，並可於底部補充您的評語。");
 };
 
-// 畫布簽名工具
 function setupCanvas(id) {
   const canvas = document.getElementById(id); 
   if (!canvas || canvases[id]) return;
