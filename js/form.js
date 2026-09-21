@@ -186,7 +186,6 @@ function renderForm(response) {
         qHtml += `<label><input type="checkbox" name="${q.questionId}" class="${inputClass}" value="${opt}" ${disabledAttr} ${isChecked}> ${opt}</label>`; 
       });
     } else if (q.type === 'text') {
-      // 🌟 若為摘要題，自動分割出「唯讀 AI 摘要」與「老師手動輸入」兩區塊
       if (['COM_DOPS_03', 'COM_DOPS_04', 'COM_DOPS_05'].includes(q.questionId) && canEdit) {
         let aiSavedVal = currentSavedAnswers[`${q.questionId}_ai`] || "";
         qHtml += `
@@ -261,8 +260,9 @@ function renderForm(response) {
 
   part2Questions.forEach(q => { html += generateQuestionHtml(q); });
 
+  // 🌟 將簽名流程設為 EPA 與 DOPS 共通
   html += `<div class="question-block" style="margin-top: 30px;"><h3>✍️ 簽名區塊</h3><div style="display:flex; gap:20px; flex-wrap:wrap;">`;
-  if (isEPA) {
+  if (isEPA || isDOPS) {
     if (isStudentUser) {
       const tSigImg = currentSavedAnswers.teacherSignature || '';
       html += `<div><h4>老師簽名</h4><img src="${tSigImg}" style="max-width:260px; border:1px solid #ccc; background:#f8fafc;"></div>`;
@@ -276,7 +276,8 @@ function renderForm(response) {
   }
   html += `</div></div>`;
 
-  if (isEPA && isStudentUser) {
+  // 🌟 將按鈕權限設為 EPA 與 DOPS 共通
+  if ((isEPA || isDOPS) && isStudentUser) {
     html += `
       <div style="display: flex; gap: 15px;">
         <button type="button" id="btn-return" class="btn-secondary" style="flex:1; background-color:#ff9800; color:white; border:none;" onclick="submitExamHandler('return')">退回修改 (解鎖)</button>
@@ -311,14 +312,19 @@ async function submitExamHandler(actionType) {
   const form = document.getElementById('dynamic-exam-form');
   const userRolesStr = [currentUser.role, currentUser.specialRole].filter(Boolean).join(' ');
   const isStudentUser = userRolesStr.includes('學生') || userRolesStr.includes('實習生');
-  const isEPA = document.getElementById('form-title').innerText.toUpperCase().includes('EPA');
+  
+  const formTitle = document.getElementById('form-title').innerText.toUpperCase();
+  const isEPA = formTitle.includes('EPA');
+  const isDOPS = formTitle.includes('DOPS');
 
   if (timerStates['ass'] && timerStates['ass'].isRunning) toggleTimer('ass', '評核'); 
   if (timerStates['fb'] && timerStates['fb'].isRunning) toggleTimer('fb', '雙向回饋'); 
 
   if (actionType === 'submit') {
     if (!form.reportValidity()) return;
-    if (isEPA) {
+    
+    // 🌟 將驗證防呆設為 EPA 與 DOPS 共通
+    if (isEPA || isDOPS) {
       if (!isStudentUser && isCanvasBlank(canvases['teacher-sig'])) return alert("⚠️ 老師須完成簽名才能送出。");
       if (isStudentUser && isCanvasBlank(canvases['student-sig'])) return alert("⚠️ 學生須完成簽名才能送出結案。");
     } else {
@@ -495,7 +501,7 @@ window.generateAndDraft = async function() {
   await submitExamHandler('draft'); 
 };
 
-// 🌟 智慧摘要 (寫入隱藏的 _ai 唯讀框)
+// 🌟 智慧摘要：將所有備註 (note) 集中於待改進 (badText)
 window.generateAISummary = function(showAlert = true) {
   const form = document.getElementById('dynamic-exam-form');
   const formData = new FormData(form);
@@ -508,47 +514,47 @@ window.generateAISummary = function(showAlert = true) {
       const note = formData.get(`${q.questionId}_note`) || "";
       let cleanQuestion = q.question.replace(/^\d+\./, '').trim(); 
       
-      // 🌟 針對 Checkbox 的特殊分流
       if (q.type === 'checkbox') {
         const checkedArr = formData.getAll(q.questionId);
         const allOptions = q.options || [];
         const uncheckedArr = allOptions.filter(o => !checkedArr.includes(o));
 
         if (checkedArr.length === 0 && !note.trim()) {
-           // 完全沒勾選且沒備註 -> 未評核
            notAssessedText += `• ${cleanQuestion}\n`;
         } else {
            if (checkedArr.length > 0) {
-             let line = `• ${cleanQuestion}\n  ✅ 已做到：${checkedArr.join(', ')}`;
-             if (note.trim()) line += `\n  📝 備註：${note.trim()}`;
-             goodText += line + "\n\n";
+             goodText += `• ${cleanQuestion}\n  ✅ 已做到：${checkedArr.join(', ')}\n\n`;
            }
-           if (uncheckedArr.length > 0) {
-             let line = `• ${cleanQuestion}\n  ❌ 未做到 (建議加強)：${uncheckedArr.join(', ')}`;
-             if (note.trim() && checkedArr.length === 0) line += `\n  📝 備註：${note.trim()}`;
+           if (uncheckedArr.length > 0 || note.trim()) {
+             let line = `• ${cleanQuestion}`;
+             if (uncheckedArr.length > 0) line += `\n  ❌ 未做到 (建議加強)：${uncheckedArr.join(', ')}`;
+             if (note.trim()) line += `\n  📝 教師備註：${note.trim()}`;
              badText += line + "\n\n";
            }
         }
       } 
-      // 🌟 一般題型 (單選/下拉)
       else {
         const ans = formData.getAll(q.questionId).join(', ').trim();
         if (!ans && !note.trim()) {
           notAssessedText += `• ${cleanQuestion}\n`;
         } else {
-          let line = `• ${cleanQuestion}`;
-          if (ans) line += `\n  👉 評比：${ans}`;
-          if (note.trim()) line += `\n  📝 備註：${note.trim()}`;
-          
           const isBad = /未符合|不|待|未完成/.test(ans) || ['1','2','3','4'].includes(ans); 
-          if (isBad) badText += line + "\n\n";
-          else goodText += line + "\n\n";
+          
+          // 只要有寫備註，就一定將備註與該題歸入「建議加強」區塊
+          if (isBad || note.trim()) {
+             let line = `• ${cleanQuestion}`;
+             if (ans) line += `\n  👉 評比：${ans}`;
+             if (note.trim()) line += `\n  📝 教師備註：${note.trim()}`;
+             badText += line + "\n\n";
+          }
+          if (!isBad && ans) {
+             goodText += `• ${cleanQuestion}\n  👉 評比：${ans}\n\n`;
+          }
         }
       }
     }
   });
 
-  // 寫入到帶有 _ai 的唯讀框
   const qGoodAI = document.querySelector('[name="COM_DOPS_03_ai"]');
   const qBadAI = document.querySelector('[name="COM_DOPS_04_ai"]');
   const qNoneAI = document.querySelector('[name="COM_DOPS_05_ai"]');
