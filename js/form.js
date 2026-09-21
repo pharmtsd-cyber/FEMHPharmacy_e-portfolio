@@ -132,7 +132,7 @@ function renderForm(response) {
   </div>`;
 
   // --- 計時控制區塊 ---
-  html += `<div class="floating-timer-panel"><h3 style="margin-top:0; color: var(--secondary-color);">⏳ 計時控制</h3>`;
+html += `<div class="floating-timer-panel"><h3 style="margin-top:0; color: var(--secondary-color);">⏳ 計時控制</h3>`;
   
   if (isReceiver || isStudentReturned) {
     html += `<div style="margin-bottom:10px; font-size:15px; color:#444;"><strong>評核花費時間：</strong> ${currentSavedAnswers['time_assessment'] || '無紀錄'}</div>`;
@@ -140,20 +140,34 @@ function renderForm(response) {
       html += `<div style="font-size:15px; color:#444;"><strong>雙向回饋時間：</strong> ${currentSavedAnswers['time_feedback'] || '無紀錄'}</div>`;
     }
   } else {
-    // 老師暫存或全新表單：提供完整的計時按鈕與防呆重置
+    // 🌟 動態判斷按鈕與提示文字：如果有時間紀錄就顯示「接續」與「已記錄：XX分XX秒」
+    const assTimeStr = currentSavedAnswers['time_assessment'] || '';
+    const assBtnText = assTimeStr ? '▶ 接續評核' : '▶ 評核開始';
+    const assStatusText = assTimeStr ? `已記錄: ${assTimeStr}` : '未開始';
+
     html += `
     <div class="timer-row" style="border-bottom:${isEPA ? 'none' : '1px solid #eee'}; margin-bottom:${isEPA ? '0' : '10px'}; padding-bottom:${isEPA ? '0' : '10px'};">
-      <button type="button" id="btn-ass" class="btn-secondary" onclick="toggleTimer('ass', '評核')" style="width:100%;">▶ 評核開始</button>
-      <div style="display:flex; justify-content:space-between; margin-top:8px;"><span id="text-ass">未開始</span><a href="javascript:void(0)" onclick="resetTimer('ass')">重置</a></div>
-      <input type="hidden" name="time_assessment" id="val_ass" value="${currentSavedAnswers['time_assessment'] || ''}">
+      <button type="button" id="btn-ass" class="btn-secondary" onclick="toggleTimer('ass', '評核')" style="width:100%;">${assBtnText}</button>
+      <div style="display:flex; justify-content:space-between; margin-top:8px;">
+        <span id="text-ass" style="color:${assTimeStr ? '#0284c7' : '#666'}; font-weight:${assTimeStr ? 'bold' : 'normal'};">${assStatusText}</span>
+        <a href="javascript:void(0)" onclick="resetTimer('ass')">重置</a>
+      </div>
+      <input type="hidden" name="time_assessment" id="val_ass" value="${assTimeStr}">
     </div>`;
     
     if (!isEPA) {
+      const fbTimeStr = currentSavedAnswers['time_feedback'] || '';
+      const fbBtnText = fbTimeStr ? '▶ 接續雙向回饋' : '▶ 雙向回饋開始';
+      const fbStatusText = fbTimeStr ? `已記錄: ${fbTimeStr}` : '未開始';
+
       html += `
       <div class="timer-row" style="border-bottom:none; margin-bottom:0; padding-bottom:0;">
-        <button type="button" id="btn-fb" class="btn-secondary" onclick="toggleTimer('fb', '雙向回饋')" style="width:100%;">▶ 雙向回饋開始</button>
-        <div style="display:flex; justify-content:space-between; margin-top:8px;"><span id="text-fb">未開始</span><a href="javascript:void(0)" onclick="resetTimer('fb')">重置</a></div>
-        <input type="hidden" name="time_feedback" id="val_fb" value="${currentSavedAnswers['time_feedback'] || ''}">
+        <button type="button" id="btn-fb" class="btn-secondary" onclick="toggleTimer('fb', '雙向回饋')" style="width:100%;">${fbBtnText}</button>
+        <div style="display:flex; justify-content:space-between; margin-top:8px;">
+          <span id="text-fb" style="color:${fbTimeStr ? '#0284c7' : '#666'}; font-weight:${fbTimeStr ? 'bold' : 'normal'};">${fbStatusText}</span>
+          <a href="javascript:void(0)" onclick="resetTimer('fb')">重置</a>
+        </div>
+        <input type="hidden" name="time_feedback" id="val_fb" value="${fbTimeStr}">
       </div>`;
     }
   }
