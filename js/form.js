@@ -251,17 +251,6 @@ html += `<div class="floating-timer-panel"><h3 style="margin-top:0; color: var(-
   
   autoSaveInterval = setInterval(saveLocalDraft, 3000);
   
-  // 顯示已記錄的時間 UI
-  if (currentSavedAnswers['time_assessment'] && !timerStates['ass'].elapsed) {
-    document.getElementById('text-ass').innerText = `已記錄: ${currentSavedAnswers['time_assessment']}`;
-    const btnAss = document.getElementById('btn-ass');
-    if (btnAss) btnAss.innerText = `▶ 接續評核`;
-  }
-  if (currentSavedAnswers['time_feedback'] && !timerStates['fb'].elapsed) {
-    document.getElementById('text-fb').innerText = `已記錄: ${currentSavedAnswers['time_feedback']}`;
-    const btnFb = document.getElementById('btn-fb');
-    if (btnFb) btnFb.innerText = `▶ 接續雙向回饋`;
-  }
 }
 
 // ==========================================
