@@ -10,10 +10,9 @@ async function handleLogin(mode) {
     originalTexts.push(b.innerText);
     b.disabled = true; 
     b.style.opacity = '0.7'; 
-    b.innerText = '⏳ 登入並載入題庫中...';
+    b.innerText = '⏳ 登入中...';
   });
   
-  // 🌟 改呼叫合併的 API，大幅減少等待時間
   const res = await callGAS('loginAndInit', { empId: empId });
   
   buttons.forEach((b, i) => { 
@@ -30,10 +29,7 @@ async function handleLogin(mode) {
     document.getElementById('user-info-display').style.display = 'block'; 
     document.getElementById('hamburger-btn').style.display = 'block'; 
     
-    // 🌟 登入時直接把全域變數塞滿，後續跳轉就不會再發送任何 API
     globalHistoryCounts = res.historyCounts || {}; 
-    globalQuestions = res.allQuestions || []; 
-    globalDopsQuestions = res.dopsCommonQs || []; 
     globalTasks = res.tasks || [];
     
     const userRolesStr = [currentUser.role, currentUser.specialRole].filter(Boolean).join(' ');
@@ -43,8 +39,8 @@ async function handleLogin(mode) {
       return allowedArr.some(r => userRolesStr.includes(r));
     });
     
-    isDashboardLoaded = true; // 標記為已快取
-    openPassport(false);      // 🌟 跳轉到學習護照總覽
+    isDashboardLoaded = true; 
+    openPassport(false);      
   } else { 
     alert(res.message); 
   }
@@ -55,7 +51,7 @@ function logout() {
   globalUserList = []; globalTasks = []; allTemplates = [];
   if (timerRaf['ass']) cancelAnimationFrame(timerRaf['ass']);
   timerStates = { ass: { isRunning: false, start: null, elapsed: 0 } };
-  isDashboardLoaded = false; globalQuestions = []; globalDopsQuestions = [];
+  isDashboardLoaded = false; 
   if (autoSaveInterval) clearInterval(autoSaveInterval);
 
   document.getElementById('login-empid').value = ''; 
@@ -64,21 +60,13 @@ function logout() {
   document.getElementById('sidebar').classList.remove('open');
   document.body.classList.remove('sidebar-open');
   
-  // 清洗所有的動態列表與畫面
   document.getElementById('theme-buttons-container').innerHTML = '';
   document.getElementById('template-list-container').innerHTML = '';
-  document.getElementById('todo-section').style.display = 'none';
-  document.getElementById('todo-list-container').innerHTML = '';
-  document.getElementById('appointment-section').style.display = 'none';
-  document.getElementById('appointment-list-container').innerHTML = '';
-  document.getElementById('questions-container').innerHTML = '';
-  
-  // 🌟 確保新分頁的紀錄也確實清空
   document.getElementById('passport-recent-list').innerHTML = '';
   document.getElementById('cal-pending-list').innerHTML = '';
   document.getElementById('cal-appt-list').innerHTML = '';
   document.getElementById('cal-completed-list').innerHTML = '';
-
+  document.getElementById('questions-container').innerHTML = '';
   document.getElementById('analytics-charts-container').style.display = 'none';
   if (chartAcgmeInstance) chartAcgmeInstance.destroy();
   if (chartUnitInstance) chartUnitInstance.destroy();
