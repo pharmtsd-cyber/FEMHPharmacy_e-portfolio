@@ -22,7 +22,7 @@ async function handleLogin(mode) {
     document.getElementById('user-info-display').style.display = 'block'; 
     document.getElementById('hamburger-btn').style.display = 'block'; 
     
-    backToDashboard(); 
+    backToDashboard(true);
   } else { 
     alert(res.message); 
   }
@@ -34,6 +34,7 @@ function logout() {
   globalUserList = []; globalTasks = []; allTemplates = [];
   if (timerRaf['ass']) cancelAnimationFrame(timerRaf['ass']);
   timerStates = { ass: { isRunning: false, start: null, elapsed: 0 } };
+  isDashboardLoaded = false; globalQuestions = [];
   if (autoSaveInterval) clearInterval(autoSaveInterval);
 
   // 🌟 2. 還原登入畫面與側邊欄狀態
