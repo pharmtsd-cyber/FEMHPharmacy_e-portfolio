@@ -4,7 +4,7 @@
 window.currentQuestionsData = [];
 
 // ==========================================
-// 1. 表單初始化與載入
+// 1. 表單初始化與載入 (前端動態組合)
 // ==========================================
 async function openForm(templateId) {
   currentTemplateId = templateId;
@@ -31,22 +31,29 @@ async function openForm(templateId) {
 
   switchView('view-form');
   document.getElementById('view-form').innerHTML = `
-    <button onclick="backToDashboard(false)" class="btn-secondary" style="margin-bottom: 20px; display: inline-block; padding: 8px 16px; width: auto;">← 返回主題列表</button>
+    <button onclick="backToDashboard(false)" class="btn-secondary" style="margin-bottom: 20px; display: inline-block; padding: 8px 16px; width: auto;">← 返回列表</button>
     <h2 id="form-title" style="margin-top:0;">畫面產生中...</h2>
     <div id="questions-container"><div style="padding:30px; text-align:center; color:#666;">⏳ 組合資料中...</div></div>
   `;
 
-  // 🌟 直接從登入時的快取拿資料，不發 API！
   const templateInfo = allTemplates.find(t => t.templateId === templateId);
   if (!templateInfo) { alert("找不到指定的模板資料。"); backToDashboard(false); return; }
   
-  const templateData = JSON.parse(JSON.stringify(templateInfo)); // 深拷貝
-  templateData.questions = globalQuestions.filter(q => q.templateId === templateId);
+  const templateData = JSON.parse(JSON.stringify(templateInfo)); // 深拷貝防污染
+  
+  // 🌟 從快取抓取該表單的一般題目
+  const baseQuestions = globalQuestions.filter(q => q.templateId === templateId);
 
-  // 極短暫延遲讓畫面有流暢感
+  // 🌟 若為 DOPS，前端瞬間將「DOPS 公版題目」接在最後面，省下大量網路傳輸時間
+  if (templateData.title.toUpperCase().includes('DOPS')) {
+    templateData.questions = [...baseQuestions, ...globalDopsQuestions];
+  } else {
+    templateData.questions = baseQuestions;
+  }
+
   setTimeout(() => {
     renderForm({ status: 'success', data: templateData });
-  }, 50);
+  }, 30);
 }
 
 // ==========================================
