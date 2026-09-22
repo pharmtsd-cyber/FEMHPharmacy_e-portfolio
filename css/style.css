@@ -91,11 +91,27 @@ label { display: flex; align-items: center; margin: 12px 0; cursor: pointer; pad
   .timer-row:last-child { border-bottom: none; margin-bottom: 0; padding-bottom: 0; }
 
 /* 📱 手機版適配 (透過 JS 切換 body 的 class) */
-body.layout-mobile .main-container { margin-left: auto; margin-right: auto; }
+body.layout-mobile .main-container { margin: 15px auto; padding: 0 15px; }
+body.layout-mobile .navbar { padding: 12px 15px; }
+body.layout-mobile .nav-title { font-size: 16px; line-height: 1.4; white-space: normal; }
+body.layout-mobile .hamburger { font-size: 26px; margin-right: 12px; }
 body.layout-mobile .theme-grid { grid-template-columns: 1fr; }
 body.layout-mobile .floating-timer-panel { position: static; width: 100%; transform: none; margin-bottom: 20px; box-sizing: border-box; box-shadow: none; border: 2px solid #cbd5e1; }
-body.layout-mobile input, body.layout-mobile select, body.layout-mobile button, body.layout-mobile label { font-size: 18px; padding: 15px; }
-body.layout-mobile .sig-pad { max-width: 100%; }
 
-.template-title { font-weight: bold; color: #005A8C; font-size: 17px; }
-.template-desc { font-size: 14px; color: #666; margin-top: 8px; line-height: 1.5; }
+/* 卡片與文字比例優化 */
+body.layout-mobile .question-block { padding: 15px; margin-bottom: 15px; }
+body.layout-mobile .question-block h3 { font-size: 18px; }
+body.layout-mobile .question-block h4 { font-size: 16px; line-height: 1.5; }
+
+/* 修正頂部基本資料、中段按鈕、底部簽名區為垂直排列 */
+body.layout-mobile div[style*="display:flex; gap:15px; flex-wrap:wrap;"],
+body.layout-mobile div[style*="display:flex; gap:20px; flex-wrap:wrap;"] { flex-direction: column; gap: 12px !important; }
+body.layout-mobile div[style*="flex:1"], body.layout-mobile div[style*="flex:2"], body.layout-mobile div[style*="flex:1.5"] { flex: none !important; width: 100% !important; display: block; margin-bottom: 0 !important; }
+
+/* 放大輸入框與選項按鈕，方便手指點擊 */
+body.layout-mobile input, body.layout-mobile select, body.layout-mobile button, body.layout-mobile textarea { font-size: 16px !important; padding: 12px !important; }
+body.layout-mobile label { display: block; margin: 8px 0; padding: 12px 15px; background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 8px; line-height: 1.4; }
+body.layout-mobile input[type="radio"], body.layout-mobile input[type="checkbox"] { transform: scale(1.4); margin-right: 12px; }
+
+/* 簽名板寬度適應 */
+body.layout-mobile .sig-pad { max-width: 100%; height: 180px; }
