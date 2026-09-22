@@ -8,7 +8,7 @@ async function backToDashboard(forceRefresh = false) {
   
   // 如果還沒載入過，或是強制重新整理，才去呼叫 API
   if (!isDashboardLoaded || forceRefresh) {
-    document.getElementById('theme-buttons-container').innerHTML = '<div style="padding: 30px; text-align: center; color:#666;">⏳ 載入模組與待辦事項中...</div>';
+    document.getElementById('theme-buttons-container').innerHTML = '<div style="padding: 30px; text-align: center; color:#666; grid-column: 1 / -1;">⏳ 與伺服器同步最新資料中 (約需 3~5 秒)...</div>';
     document.getElementById('template-list-container').innerHTML = '';
     document.getElementById('selected-theme-title').style.display = 'none';
     document.getElementById('todo-section').style.display = 'none';
