@@ -1,61 +1,129 @@
-async function backToDashboard(forceRefresh = false) {
-  currentRecordId = ""; currentSavedAnswers = {}; currentTemplateId = "";
-  currentAttemptCount = 0; currentTaskStatus = "";
-  if(autoSaveInterval) clearInterval(autoSaveInterval);
-  
-  updateNavState('tab-dashboard');
-  switchView('view-dashboard'); 
-  
+// ==========================================
+// 1. 共用資料載入邏輯
+// ==========================================
+async function loadDataIfNeeded(forceRefresh = false) {
   if (!isDashboardLoaded || forceRefresh) {
-    document.getElementById('theme-buttons-container').innerHTML = '<div style="padding: 30px; text-align: center; color:#666; grid-column: 1 / -1;">⏳ 與伺服器同步最新資料中 (約需 3~5 秒)...</div>';
-    document.getElementById('template-list-container').innerHTML = '';
-    document.getElementById('selected-theme-title').style.display = 'none';
-    document.getElementById('todo-section').style.display = 'none';
-    document.getElementById('appointment-section').style.display = 'none';
-
-    // 🌟 如果是重新整理，使用輕量 API (因為已登入)
     const res = await callGAS(forceRefresh && isDashboardLoaded ? 'getDashboardInit' : 'loginAndInit', { empId: currentUser.empId });
-    
     if (res && res.status === 'success') {
       globalHistoryCounts = res.historyCounts || {}; 
       globalQuestions = res.allQuestions || []; 
-      globalDopsQuestions = res.dopsCommonQs || []; // 存入快取
+      globalDopsQuestions = res.dopsCommonQs || []; 
       globalTasks = res.tasks || [];
       if(!isDashboardLoaded) allTemplates = res.templates || [];
       isDashboardLoaded = true;
+      return true;
     } else {
-      document.getElementById('theme-buttons-container').innerHTML = '<p style="color:red;">載入失敗，請檢查網路連線後重新登入</p>';
-      return;
+      alert('載入失敗，請檢查網路連線後重新登入');
+      return false;
     }
   }
-
-  // 🌟 核心邏輯：判斷是否為學生 (包含學生、實習生)
-  const isStudentUser = [currentUser.role, currentUser.specialRole].join(' ').includes('學生') || [currentUser.role, currentUser.specialRole].join(' ').includes('實習生');
-
-  if (isStudentUser) {
-    // 學生視角：隱藏發起問卷的區塊
-    document.getElementById('theme-buttons-container').style.display = 'none';
-    document.getElementById('template-list-container').style.display = 'none';
-    document.getElementById('selected-theme-title').style.display = 'none';
-    const passportTitle = document.getElementById('theme-buttons-container').previousElementSibling;
-    if (passportTitle && passportTitle.tagName === 'H2') passportTitle.style.display = 'none';
-  } else {
-    // 老師視角：顯示所有模板分類
-    document.getElementById('theme-buttons-container').style.display = 'grid';
-    const passportTitle = document.getElementById('theme-buttons-container').previousElementSibling;
-    if (passportTitle && passportTitle.tagName === 'H2') passportTitle.style.display = 'block';
-
-    const allowedThemes = new Set(allTemplates.map(t => t.theme));
-    let themeHTML = '';
-    if (allowedThemes.size === 0) themeHTML = '<p style="color:#e11d48; text-align:center; grid-column: 1 / -1;">目前系統尚無啟用的考核項目</p>';
-    else allowedThemes.forEach(theme => themeHTML += `<div class="theme-card" onclick="filterTemplatesByTheme('${theme}')">${theme}</div>`);
-    document.getElementById('theme-buttons-container').innerHTML = themeHTML;
-  }
-
-  // 雙方都會看到待辦與預約清單
-  renderTodoList(globalTasks);
+  return true;
 }
 
+// 🌟 共用卡片產生器 (DRY)
+function createListHTML(tasksArr) {
+  let html = '';
+  tasksArr.forEach(task => {
+    const origIndex = globalTasks.indexOf(task);
+    const templateInfo = allTemplates.find(t => t.templateId === task.templateId);
+    const title = templateInfo ? templateInfo.title : "未知項目";
+    
+    let badgeClass = 'status-pending'; let icon = '📝'; let actionText = '繼續填寫 ➔'; let color = '#e11d48';
+    if(task.status === '預約中') { badgeClass = 'status-appt'; icon = '⏰'; actionText = '進入表單 ➔'; color = '#0284c7'; }
+    if(task.status === '已結案') { badgeClass = 'status-closed'; icon = '✅'; actionText = '檢視內容 ➔'; color = '#166534'; }
+    if(task.status === '老師暫存') { badgeClass = 'status-draft'; }
+
+    html += `
+      <div class="template-item" style="border-left: 5px solid ${color}; margin-bottom:10px;" onclick="resumeTaskByIndex(${origIndex})">
+        <div>
+          <div class="template-title">${icon} ${title} <span class="status-badge ${badgeClass}">${task.status}</span></div>
+          <div class="template-desc">${task.time} ｜ 對象：${task.studentName || task.teacherId}</div>
+        </div>
+        <div style="color:${color}; font-weight:bold; white-space:nowrap; text-align:right;">${actionText}</div>
+      </div>`;
+  });
+  return html || '<p style="text-align:center; color:#94a3b8; padding: 20px 0;">尚無紀錄</p>';
+}
+
+// ==========================================
+// 2. 分頁 1：📖 學習護照 (總覽)
+// ==========================================
+async function openPassport(forceRefresh = false) {
+  if(autoSaveInterval) clearInterval(autoSaveInterval);
+  updateNavState('tab-passport');
+  switchView('view-passport'); 
+  
+  if (!isDashboardLoaded || forceRefresh) {
+    document.getElementById('passport-recent-list').innerHTML = '<div style="padding: 30px; text-align: center; color:#666;">⏳ 與伺服器同步資料中...</div>';
+  }
+
+  const success = await loadDataIfNeeded(forceRefresh);
+  if (!success) return;
+
+  // 權限控制：學生隱藏「考核表單」分頁按鈕
+  const isStudentUser = [currentUser.role, currentUser.specialRole].join(' ').includes('學生') || [currentUser.role, currentUser.specialRole].join(' ').includes('實習生');
+  document.getElementById('tab-forms').style.display = isStudentUser ? 'none' : 'block';
+
+  // 計算儀表板數據
+  const completedCount = globalTasks.filter(t => t.status === '已結案').length;
+  const apptCount = globalTasks.filter(t => t.status === '預約中').length;
+  const pendingCount = globalTasks.filter(t => t.status !== '已結案' && t.status !== '預約中').length;
+
+  document.getElementById('metric-completed').innerText = completedCount;
+  document.getElementById('metric-appt').innerText = apptCount;
+  document.getElementById('metric-pending').innerText = pendingCount;
+
+  // 渲染近期更新 (取前 5 筆)
+  const sortedTasks = [...globalTasks].sort((a,b) => new Date(b.time) - new Date(a.time)).slice(0, 5);
+  document.getElementById('passport-recent-list').innerHTML = createListHTML(sortedTasks);
+}
+
+// ==========================================
+// 3. 分頁 2：📝 考核表單 (僅老師)
+// ==========================================
+async function openForms() {
+  if(autoSaveInterval) clearInterval(autoSaveInterval);
+  updateNavState('tab-forms');
+  switchView('view-forms'); 
+
+  const success = await loadDataIfNeeded();
+  if (!success) return;
+
+  const allowedThemes = new Set(allTemplates.map(t => t.theme));
+  let themeHTML = '';
+  if (allowedThemes.size === 0) themeHTML = '<p style="color:#e11d48; text-align:center; grid-column: 1 / -1;">目前系統尚無啟用的考核項目</p>';
+  else allowedThemes.forEach(theme => themeHTML += `<div class="theme-card" onclick="filterTemplatesByTheme('${theme}')">${theme}</div>`);
+  
+  document.getElementById('theme-buttons-container').innerHTML = themeHTML;
+  document.getElementById('template-list-container').innerHTML = '';
+  document.getElementById('selected-theme-title').style.display = 'none';
+}
+
+// ==========================================
+// 4. 分頁 3：📅 預約與行事曆 (分類檢視)
+// ==========================================
+async function openCalendar() {
+  if(autoSaveInterval) clearInterval(autoSaveInterval);
+  updateNavState('tab-calendar');
+  switchView('view-calendar');
+  
+  const success = await loadDataIfNeeded();
+  if (!success) return;
+
+  // 排序並分流
+  const sortedTasks = [...globalTasks].sort((a,b) => new Date(b.time) - new Date(a.time));
+  const pending = sortedTasks.filter(t => t.status !== '已結案' && t.status !== '預約中');
+  const appts = sortedTasks.filter(t => t.status === '預約中');
+  const completed = sortedTasks.filter(t => t.status === '已結案');
+
+  document.getElementById('cal-pending-list').innerHTML = createListHTML(pending);
+  document.getElementById('cal-appt-list').innerHTML = createListHTML(appts);
+  document.getElementById('cal-completed-list').innerHTML = createListHTML(completed);
+}
+
+// ==========================================
+// 5. 互動與彈出視窗功能
+// ==========================================
 let currentAppointTemplate = "";
 
 function filterTemplatesByTheme(selectedTheme) {
@@ -78,47 +146,18 @@ function filterTemplatesByTheme(selectedTheme) {
   document.getElementById('template-list-container').innerHTML = listHTML;
 }
 
-function renderTodoList(tasks) {
-  globalTasks = tasks; 
-  const todoContainer = document.getElementById('todo-list-container'); 
-  const apptContainer = document.getElementById('appointment-list-container'); 
+function resumeTaskByIndex(index) {
+  const task = globalTasks[index]; if (!task) return;
+  currentRecordId = task.recordId; 
+  currentAttemptCount = task.attempt || 0; 
+  currentTaskStatus = task.status || ""; 
+  currentSavedAnswers = task.answers; 
+  currentSavedAnswers.teacherSignature = task.teacherSignature;
+  currentSavedAnswers.studentSignature = task.studentSignature;
   
-  let todoHtml = ''; let apptHtml = '';
-
-  globalTasks.forEach((task, index) => {
-    // 過濾掉已結案的
-    if (task.status === '已結案') return;
-
-    const templateInfo = allTemplates.find(t => t.templateId === task.templateId);
-    const title = templateInfo ? templateInfo.title : "未知項目";
-    
-    if (task.status === '預約中') {
-      apptHtml += `
-        <div class="template-item" style="border-left: 5px solid #0284c7;" onclick="resumeTaskByIndex(${index})">
-          <div>
-            <div class="template-title">${title} <span class="status-badge status-appt">⏰ 預約排程</span></div>
-            <div class="template-desc">預約時間：${task.time} <br>對象：${task.studentName || task.teacherId}</div>
-          </div>
-          <div style="color:#0284c7; font-weight:bold; white-space:nowrap;">進入表單 ➔</div>
-        </div>`;
-    } else {
-      const badgeClass = task.status === '老師暫存' ? 'status-draft' : 'status-pending';
-      todoHtml += `
-        <div class="template-item" style="border-left: 5px solid #e11d48;" onclick="resumeTaskByIndex(${index})">
-          <div>
-            <div class="template-title">${title} <span class="status-badge ${badgeClass}">${task.status}</span></div>
-            <div class="template-desc">第 ${task.attempt} 次評估 ｜ 最後更新：${task.time}</div>
-          </div>
-          <div style="color:#e11d48; font-weight:bold; white-space:nowrap;">繼續填寫 ➔</div>
-        </div>`;
-    }
-  });
-
-  todoContainer.innerHTML = todoHtml;
-  document.getElementById('todo-section').style.display = todoHtml ? 'block' : 'none';
-  
-  apptContainer.innerHTML = apptHtml;
-  document.getElementById('appointment-section').style.display = apptHtml ? 'block' : 'none';
+  // 進入表單時隱藏導航高亮
+  updateNavState(''); 
+  openForm(task.templateId);             
 }
 
 function openAppointmentModal(templateId, title) {
@@ -155,52 +194,10 @@ async function submitAppointment() {
   if (res.status === 'success') {
     alert("✅ 預約已成功建立！");
     closeAppointmentModal();
-    backToDashboard(true); 
+    openCalendar(); // 預約成功後跳轉至行事曆
   } else {
     alert("錯誤：" + res.message);
     event.target.innerText = originalText;
     event.target.disabled = false;
   }
-}
-
-function openCalendar() {
-  updateNavState('tab-calendar');
-  switchView('view-calendar');
-  
-  let calHtml = '';
-  const sortedTasks = [...globalTasks].sort((a,b) => new Date(b.time) - new Date(a.time));
-  
-  sortedTasks.forEach((task, index) => {
-    const templateInfo = allTemplates.find(t => t.templateId === task.templateId);
-    const title = templateInfo ? templateInfo.title : "未知項目";
-    
-    let badgeClass = 'status-pending'; let icon = '📝';
-    if(task.status === '預約中') { badgeClass = 'status-appt'; icon = '⏰'; }
-    if(task.status === '已結案') { badgeClass = 'status-closed'; icon = '✅'; }
-
-    calHtml += `
-      <div class="template-item" style="border: 1px solid #e2e8f0; margin-bottom:10px;" onclick="resumeTaskByIndex(${index})">
-        <div>
-          <div class="template-title">${icon} ${title} <span class="status-badge ${badgeClass}">${task.status}</span></div>
-          <div class="template-desc">${task.time} ｜ 對象：${task.studentName || task.teacherId}</div>
-        </div>
-        <div style="color:#64748b; font-size:14px; white-space:nowrap; text-align:right;">檢視 ➔</div>
-      </div>`;
-  });
-  
-  document.getElementById('calendar-list-container').innerHTML = calHtml || '<p style="text-align:center; color:#94a3b8;">目前尚無任何紀錄或預約</p>';
-}
-
-function resumeTaskByIndex(index) {
-  const task = globalTasks[index]; if (!task) return;
-  currentRecordId = task.recordId; 
-  currentAttemptCount = task.attempt || 0; 
-  currentTaskStatus = task.status || ""; 
-  currentSavedAnswers = task.answers; 
-  currentSavedAnswers.teacherSignature = task.teacherSignature;
-  currentSavedAnswers.studentSignature = task.studentSignature;
-  updateNavState(''); 
-  
-  // 切換時如果是在行事曆頁面，直接覆蓋畫面
-  openForm(task.templateId);             
 }
