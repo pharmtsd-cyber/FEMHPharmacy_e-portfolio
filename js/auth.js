@@ -57,7 +57,7 @@ function logout() {
   globalUserList = []; globalTasks = []; allTemplates = [];
   if (timerRaf['ass']) cancelAnimationFrame(timerRaf['ass']);
   timerStates = { ass: { isRunning: false, start: null, elapsed: 0 } };
-  isDashboardLoaded = false; globalQuestions = [];
+  isDashboardLoaded = false; globalQuestions = []; globalDopsQuestions = [];
   if (autoSaveInterval) clearInterval(autoSaveInterval);
 
   document.getElementById('login-empid').value = ''; 
