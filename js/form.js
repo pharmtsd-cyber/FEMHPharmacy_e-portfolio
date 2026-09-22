@@ -1,11 +1,5 @@
-// ==========================================
-// 全域變數供摘要功能讀取
-// ==========================================
 window.currentQuestionsData = [];
 
-// ==========================================
-// 1. 表單初始化與載入
-// ==========================================
 async function openForm(templateId) {
   currentTemplateId = templateId;
   window.currentQuestionsData = [];
@@ -36,7 +30,7 @@ async function openForm(templateId) {
     <div id="questions-container"><div style="padding:30px; text-align:center; color:#666;">⏳ 正在從伺服器載入題目，請稍候...</div></div>
   `;
 
-  // 🌟 發送 API 取得單一表單的題目 (輕量級，不會當機)
+  // 🌟 回歸：向後端取得該表單專屬題目，徹底告別記憶體爆炸
   const res = await callGAS('getTemplateData', { templateId, empId: currentUser.empId });
   if (res.status === 'error') {
     alert("❌ " + res.message);
@@ -46,6 +40,8 @@ async function openForm(templateId) {
   
   renderForm(res);
 }
+
+// （下方的 renderForm 與其餘邏輯請維持前一版的原樣不變）
 
 function renderForm(response) {
   const data = response.data;
