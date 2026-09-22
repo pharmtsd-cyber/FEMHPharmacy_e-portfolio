@@ -5,8 +5,38 @@
   <link rel="icon" type="image/x-icon" href="https://github.com/pharmtsd-cyber/Pharmacy-calculator/blob/main/logo_White.png?raw=true">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>亞東紀念醫院藥學部 數位學習護照</title>
-  <link rel="stylesheet" href="css/style.css">
-  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+  <!-- 🚀 效能優化 1：預先建立 Google API 連線，節省日後呼叫 API 的 TLS 握手時間 -->
+  <link rel="preconnect" href="https://script.google.com" crossorigin>
+  <link rel="preconnect" href="https://script.googleusercontent.com" crossorigin>
+
+  <!-- 🚀 效能優化 2：提取 Critical CSS (關鍵樣式)，確保首屏 (登入畫面) 瞬間渲染，消除 Layout Render Delay -->
+  <style>
+    :root { --primary-color: #005A8C; --bg-color: #F4F7F6; --card-bg: #FFFFFF; --text-main: #2C3E50; }
+    body { font-family: '微軟正黑體', -apple-system, sans-serif; margin: 0; background-color: var(--bg-color); color: var(--text-main); }
+    .navbar { background: var(--primary-color); color: white; padding: 15px 25px; display: flex; align-items: center; justify-content: space-between; box-shadow: 0 4px 12px rgba(0,90,140,0.15); }
+    .nav-title { font-size: 20px; font-weight: bold; }
+    .main-container { max-width: 850px; margin: 40px auto; padding: 0 20px; }
+    .view-section { display: none; }
+    .view-section.active { display: block; }
+    .login-card { background: var(--card-bg); padding: 50px 40px; border-radius: 12px; box-shadow: 0 8px 30px rgba(0,0,0,0.08); text-align: center; max-width: 400px; margin: 60px auto; border-top: 6px solid var(--primary-color); }
+    .login-card input { width: 100%; box-sizing: border-box; padding: 14px; margin: 15px 0; border: 2px solid #E0E6ED; border-radius: 8px; font-size: 16px; text-align: center; outline: none; }
+    .btn-primary { background: var(--primary-color); color: white; border: none; padding: 12px 24px; border-radius: 8px; font-size: 16px; font-weight: bold; cursor: pointer; box-sizing: border-box; }
+  </style>
+
+  <!-- 🚀 效能優化 3：非同步載入主 CSS，解除 Render-Blocking 阻塞 -->
+  <link rel="stylesheet" href="css/style.css" media="print" onload="this.media='all'">
+  <noscript><link rel="stylesheet" href="css/style.css"></noscript>
+
+  <!-- 🚀 效能優化 4：將所有腳本移至 head 並加上 defer，平行下載不阻斷渲染，且保證執行順序 -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js" defer></script>
+  <script src="js/globals.js" defer></script>
+  <script src="js/api.js" defer></script>
+  <script src="js/layout.js" defer></script>
+  <script src="js/auth.js" defer></script>
+  <script src="js/dashboard.js" defer></script>
+  <script src="js/analytics.js" defer></script>
+  <script src="js/form.js" defer></script>
 </head>
 <body class="layout-web">
   
@@ -35,7 +65,7 @@
     <!-- 1：登入區塊 -->
     <div id="view-login" class="view-section active">
       <div class="login-card">
-        <h2>系統登入</h2>
+        <h2 style="margin-top: 0;">系統登入</h2>
         <p>請輸入您的員工編號以進入護照系統</p>
         <input type="text" id="login-empid" placeholder="例如: F3598" />
         
@@ -47,7 +77,7 @@
     </div>
 
     <!-- 2：學習護照總覽 (雙方共用：儀表板與近期動態) -->
-    <div id="view-passport" class="view-section" style="display:none;">
+    <div id="view-passport" class="view-section">
       <h2 class="section-title" style="color:var(--primary-color);">📖 學習護照總覽</h2>
       
       <!-- 頂部儀表板 -->
@@ -71,7 +101,7 @@
     </div>
 
     <!-- 3：考核表單區塊 (僅老師可見：發起問卷與預約) -->
-    <div id="view-forms" class="view-section" style="display:none;">
+    <div id="view-forms" class="view-section">
       <h2 class="section-title">📝 發起考核表單</h2>
       <div id="theme-buttons-container" class="theme-grid"></div>
       <h3 class="section-title" id="selected-theme-title" style="display:none; margin-top:30px;">請選擇考核項目</h3>
@@ -79,7 +109,7 @@
     </div>
 
     <!-- 4：行事曆區塊 (歷史紀錄與所有預約 分類呈現) -->
-    <div id="view-calendar" class="view-section" style="display:none;">
+    <div id="view-calendar" class="view-section">
       <h2 class="section-title" style="color:var(--primary-color);">📅 預約與行事曆</h2>
       <p style="color:#666; font-size:14px; margin-bottom:25px;">在此檢視您參與過的所有狀態紀錄，點選卡片可進入對應表單。</p>
       
@@ -94,14 +124,14 @@
     </div>
 
     <!-- 5：問卷填寫區塊 -->
-    <div id="view-form" class="view-section" style="display:none;">
+    <div id="view-form" class="view-section">
       <button onclick="openPassport(false)" class="btn-secondary" style="margin-bottom: 20px; display: inline-block; padding: 8px 16px; width: auto;">← 返回</button>
       <h2 id="form-title" style="margin-top:0;"></h2>
       <div id="questions-container"></div>
     </div>
 
     <!-- 6：學習分析區塊 -->
-    <div id="view-analytics" class="view-section" style="display:none;">
+    <div id="view-analytics" class="view-section">
       <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid var(--secondary-color); padding-bottom: 10px; margin-bottom: 25px; flex-wrap: wrap; gap: 10px;">
         <h2 style="color:var(--secondary-color); margin:0;">📊 我的學習分析雷達圖</h2>
         <div style="display: flex; gap: 10px; background: #f1f5f9; padding: 5px; border-radius: 8px;">
@@ -133,10 +163,10 @@
       <p id="appoint-template-name" style="font-weight:bold; color:#0284c7; font-size:15px; margin-bottom:15px; line-height: 1.4;"></p>
       
       <label style="display:block; margin:10px 0 5px; padding:0; background:none; border:none; font-weight:bold;">預約日期與時間：</label>
-      <input type="datetime-local" id="appoint-datetime" style="width:100%; margin-bottom:15px;">
+      <input type="datetime-local" id="appoint-datetime" style="width:100%; margin-bottom:15px; padding: 12px; border: 2px solid #E0E6ED; border-radius: 8px; box-sizing: border-box;">
       
       <label style="display:block; margin:10px 0 5px; padding:0; background:none; border:none; font-weight:bold;">對象 (教師或學生)：</label>
-      <input type="text" id="appoint-target" list="appoint-user-list" placeholder="請搜尋輸入員工編號或姓名..." style="width:100%; margin-bottom:25px;">
+      <input type="text" id="appoint-target" list="appoint-user-list" placeholder="請搜尋輸入員工編號或姓名..." style="width:100%; margin-bottom:25px; padding: 12px; border: 2px solid #E0E6ED; border-radius: 8px; box-sizing: border-box;">
       <datalist id="appoint-user-list"></datalist>
       
       <div style="display:flex; gap:15px;">
@@ -146,12 +176,5 @@
     </div>
   </div>
 
-  <script src="js/globals.js"></script>
-  <script src="js/api.js"></script>
-  <script src="js/layout.js"></script>
-  <script src="js/auth.js"></script>
-  <script src="js/dashboard.js"></script>
-  <script src="js/analytics.js"></script>
-  <script src="js/form.js"></script>
 </body>
 </html>
