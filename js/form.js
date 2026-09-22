@@ -1,5 +1,11 @@
+// ==========================================
+// 全域變數供摘要功能讀取
+// ==========================================
 window.currentQuestionsData = [];
 
+// ==========================================
+// 1. 表單初始化與載入
+// ==========================================
 async function openForm(templateId) {
   currentTemplateId = templateId;
   window.currentQuestionsData = [];
@@ -26,25 +32,19 @@ async function openForm(templateId) {
   switchView('view-form');
   document.getElementById('view-form').innerHTML = `
     <button onclick="openPassport(false)" class="btn-secondary" style="margin-bottom: 20px; display: inline-block; padding: 8px 16px; width: auto;">← 返回</button>
-    <h2 id="form-title" style="margin-top:0;">畫面產生中...</h2>
-    <div id="questions-container"><div style="padding:30px; text-align:center; color:#666;">⏳ 組合資料中...</div></div>
+    <h2 id="form-title" style="margin-top:0;">讀取表單中...</h2>
+    <div id="questions-container"><div style="padding:30px; text-align:center; color:#666;">⏳ 正在從伺服器載入題目，請稍候...</div></div>
   `;
 
-  const templateInfo = allTemplates.find(t => t.templateId === templateId);
-  if (!templateInfo) { alert("找不到指定的模板資料。"); openPassport(false); return; }
-  
-  const templateData = JSON.parse(JSON.stringify(templateInfo)); 
-  const baseQuestions = globalQuestions.filter(q => q.templateId === templateId);
-
-  if (templateData.title.toUpperCase().includes('DOPS')) {
-    templateData.questions = [...baseQuestions, ...globalDopsQuestions];
-  } else {
-    templateData.questions = baseQuestions;
+  // 🌟 發送 API 取得單一表單的題目 (輕量級，不會當機)
+  const res = await callGAS('getTemplateData', { templateId, empId: currentUser.empId });
+  if (res.status === 'error') {
+    alert("❌ " + res.message);
+    openPassport(false);
+    return;
   }
-
-  setTimeout(() => {
-    renderForm({ status: 'success', data: templateData });
-  }, 30);
+  
+  renderForm(res);
 }
 
 function renderForm(response) {
