@@ -1,13 +1,8 @@
-// ==========================================
-// 1. 共用資料載入邏輯
-// ==========================================
 async function loadDataIfNeeded(forceRefresh = false) {
   if (!isDashboardLoaded || forceRefresh) {
     const res = await callGAS(forceRefresh && isDashboardLoaded ? 'getDashboardInit' : 'loginAndInit', { empId: currentUser.empId });
     if (res && res.status === 'success') {
       globalHistoryCounts = res.historyCounts || {}; 
-      globalQuestions = res.allQuestions || []; 
-      globalDopsQuestions = res.dopsCommonQs || []; 
       globalTasks = res.tasks || [];
       if(!isDashboardLoaded) allTemplates = res.templates || [];
       isDashboardLoaded = true;
@@ -20,7 +15,6 @@ async function loadDataIfNeeded(forceRefresh = false) {
   return true;
 }
 
-// 🌟 共用卡片產生器 (DRY)
 function createListHTML(tasksArr) {
   let html = '';
   tasksArr.forEach(task => {
@@ -45,9 +39,6 @@ function createListHTML(tasksArr) {
   return html || '<p style="text-align:center; color:#94a3b8; padding: 20px 0;">尚無紀錄</p>';
 }
 
-// ==========================================
-// 2. 分頁 1：📖 學習護照 (總覽)
-// ==========================================
 async function openPassport(forceRefresh = false) {
   if(autoSaveInterval) clearInterval(autoSaveInterval);
   updateNavState('tab-passport');
@@ -60,11 +51,9 @@ async function openPassport(forceRefresh = false) {
   const success = await loadDataIfNeeded(forceRefresh);
   if (!success) return;
 
-  // 權限控制：學生隱藏「考核表單」分頁按鈕
   const isStudentUser = [currentUser.role, currentUser.specialRole].join(' ').includes('學生') || [currentUser.role, currentUser.specialRole].join(' ').includes('實習生');
   document.getElementById('tab-forms').style.display = isStudentUser ? 'none' : 'block';
 
-  // 計算儀表板數據
   const completedCount = globalTasks.filter(t => t.status === '已結案').length;
   const apptCount = globalTasks.filter(t => t.status === '預約中').length;
   const pendingCount = globalTasks.filter(t => t.status !== '已結案' && t.status !== '預約中').length;
@@ -73,14 +62,10 @@ async function openPassport(forceRefresh = false) {
   document.getElementById('metric-appt').innerText = apptCount;
   document.getElementById('metric-pending').innerText = pendingCount;
 
-  // 渲染近期更新 (取前 5 筆)
   const sortedTasks = [...globalTasks].sort((a,b) => new Date(b.time) - new Date(a.time)).slice(0, 5);
   document.getElementById('passport-recent-list').innerHTML = createListHTML(sortedTasks);
 }
 
-// ==========================================
-// 3. 分頁 2：📝 考核表單 (僅老師)
-// ==========================================
 async function openForms() {
   if(autoSaveInterval) clearInterval(autoSaveInterval);
   updateNavState('tab-forms');
@@ -99,9 +84,6 @@ async function openForms() {
   document.getElementById('selected-theme-title').style.display = 'none';
 }
 
-// ==========================================
-// 4. 分頁 3：📅 預約與行事曆 (分類檢視)
-// ==========================================
 async function openCalendar() {
   if(autoSaveInterval) clearInterval(autoSaveInterval);
   updateNavState('tab-calendar');
@@ -110,7 +92,6 @@ async function openCalendar() {
   const success = await loadDataIfNeeded();
   if (!success) return;
 
-  // 排序並分流
   const sortedTasks = [...globalTasks].sort((a,b) => new Date(b.time) - new Date(a.time));
   const pending = sortedTasks.filter(t => t.status !== '已結案' && t.status !== '預約中');
   const appts = sortedTasks.filter(t => t.status === '預約中');
@@ -121,9 +102,6 @@ async function openCalendar() {
   document.getElementById('cal-completed-list').innerHTML = createListHTML(completed);
 }
 
-// ==========================================
-// 5. 互動與彈出視窗功能
-// ==========================================
 let currentAppointTemplate = "";
 
 function filterTemplatesByTheme(selectedTheme) {
@@ -155,7 +133,6 @@ function resumeTaskByIndex(index) {
   currentSavedAnswers.teacherSignature = task.teacherSignature;
   currentSavedAnswers.studentSignature = task.studentSignature;
   
-  // 進入表單時隱藏導航高亮
   updateNavState(''); 
   openForm(task.templateId);             
 }
@@ -194,7 +171,7 @@ async function submitAppointment() {
   if (res.status === 'success') {
     alert("✅ 預約已成功建立！");
     closeAppointmentModal();
-    openCalendar(); // 預約成功後跳轉至行事曆
+    openCalendar(); 
   } else {
     alert("錯誤：" + res.message);
     event.target.innerText = originalText;
