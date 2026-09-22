@@ -1,5 +1,11 @@
+// ==========================================
+// 全域變數供摘要功能讀取
+// ==========================================
 window.currentQuestionsData = [];
 
+// ==========================================
+// 1. 表單初始化與載入 (導入智慧快取)
+// ==========================================
 async function openForm(templateId) {
   currentTemplateId = templateId;
   window.currentQuestionsData = [];
@@ -23,14 +29,31 @@ async function openForm(templateId) {
     }
   }
 
+  const templateInfo = allTemplates.find(t => t.templateId === templateId);
+  if (!templateInfo) { alert("找不到指定的模板資料。"); openPassport(false); return; }
+
   switchView('view-form');
+
+  // 🌟 智慧快取啟動：如果已經載入過這份表單，直接從快取拿資料，0 秒渲染！
+  if (globalQuestionsCache[templateId]) {
+    document.getElementById('view-form').innerHTML = `
+      <button onclick="openPassport(false)" class="btn-secondary" style="margin-bottom: 20px; display: inline-block; padding: 8px 16px; width: auto;">← 返回</button>
+      <h2 id="form-title" style="margin-top:0;">畫面產生中...</h2>
+      <div id="questions-container"><div style="padding:30px; text-align:center; color:#666;">⏳ 組合資料中...</div></div>
+    `;
+    const clonedData = JSON.parse(JSON.stringify(templateInfo));
+    clonedData.questions = globalQuestionsCache[templateId];
+    setTimeout(() => { renderForm({ status: 'success', data: clonedData }); }, 30);
+    return;
+  }
+
+  // 若無快取，才向後端拿取資料並顯示提示
   document.getElementById('view-form').innerHTML = `
     <button onclick="openPassport(false)" class="btn-secondary" style="margin-bottom: 20px; display: inline-block; padding: 8px 16px; width: auto;">← 返回</button>
     <h2 id="form-title" style="margin-top:0;">讀取表單中...</h2>
-    <div id="questions-container"><div style="padding:30px; text-align:center; color:#666;">⏳ 正在從伺服器載入題目，請稍候...</div></div>
+    <div id="questions-container"><div style="padding:30px; text-align:center; color:#666;">⏳ 首次載入需 1~2 秒，請稍候...</div></div>
   `;
 
-  // 🌟 回歸：向後端取得該表單專屬題目，徹底告別記憶體爆炸
   const res = await callGAS('getTemplateData', { templateId, empId: currentUser.empId });
   if (res.status === 'error') {
     alert("❌ " + res.message);
@@ -38,8 +61,12 @@ async function openForm(templateId) {
     return;
   }
   
+  // 🌟 將拿到的題目存入快取，下次點擊瞬間開啟
+  globalQuestionsCache[templateId] = res.data.questions;
   renderForm(res);
 }
+
+// ... 下方的 renderForm 保持原樣不變 ...
 
 // （下方的 renderForm 與其餘邏輯請維持前一版的原樣不變）
 
