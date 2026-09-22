@@ -10,6 +10,7 @@ let globalTasks = [];
 let globalHistoryCounts = {}; 
 
 let isDashboardLoaded = false; 
+let globalQuestionsCache = {}; // 🌟 新增：存放已載入過的表單題目，實現秒開
 
 let timerStates = { 
   ass: { isRunning: false, start: null, elapsed: 0 },
