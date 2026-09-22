@@ -4,7 +4,6 @@ async function handleLogin(mode) {
   
   document.body.className = `layout-${mode}`;
   
-  // 🌟 鎖定按鈕並顯示載入中，避免使用者以為當機重複點擊
   const buttons = document.querySelectorAll('.login-card button');
   const originalTexts = [];
   buttons.forEach((b, i) => { 
@@ -17,7 +16,6 @@ async function handleLogin(mode) {
   // 🌟 改呼叫合併的 API，大幅減少等待時間
   const res = await callGAS('loginAndInit', { empId: empId });
   
-  // 恢復按鈕狀態
   buttons.forEach((b, i) => { 
     b.disabled = false; 
     b.style.opacity = '1'; 
@@ -35,8 +33,8 @@ async function handleLogin(mode) {
     // 🌟 登入時直接把全域變數塞滿，後續跳轉就不會再發送任何 API
     globalHistoryCounts = res.historyCounts || {}; 
     globalQuestions = res.allQuestions || []; 
+    globalDopsQuestions = res.dopsCommonQs || []; 
     globalTasks = res.tasks || [];
-    globalDopsQuestions = res.dopsCommonQs || [];
     
     const userRolesStr = [currentUser.role, currentUser.specialRole].filter(Boolean).join(' ');
     allTemplates = res.templates.filter(t => {
@@ -70,6 +68,8 @@ function logout() {
   document.getElementById('template-list-container').innerHTML = '';
   document.getElementById('todo-section').style.display = 'none';
   document.getElementById('todo-list-container').innerHTML = '';
+  document.getElementById('appointment-section').style.display = 'none';
+  document.getElementById('appointment-list-container').innerHTML = '';
   document.getElementById('questions-container').innerHTML = '';
   document.getElementById('analytics-charts-container').style.display = 'none';
   if (chartAcgmeInstance) chartAcgmeInstance.destroy();
