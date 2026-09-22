@@ -36,6 +36,7 @@ async function handleLogin(mode) {
     globalHistoryCounts = res.historyCounts || {}; 
     globalQuestions = res.allQuestions || []; 
     globalTasks = res.tasks || [];
+    globalDopsQuestions = res.dopsCommonQs || [];
     
     const userRolesStr = [currentUser.role, currentUser.specialRole].filter(Boolean).join(' ');
     allTemplates = res.templates.filter(t => {
