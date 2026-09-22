@@ -22,7 +22,8 @@
 
   <nav id="sidebar" class="sidebar">
     <div class="sidebar-content">
-      <button onclick="backToDashboard(true)" class="nav-btn active" id="tab-dashboard">📝 學習護照</button>
+      <button onclick="openPassport(true)" class="nav-btn active" id="tab-passport">📖 學習護照</button>
+      <button onclick="openForms()" class="nav-btn" id="tab-forms">📝 考核表單</button>
       <button onclick="openCalendar()" class="nav-btn" id="tab-calendar">📅 預約與行事曆</button>
       <button onclick="openAnalytics()" class="nav-btn" id="tab-analytics">📊 學習分析</button>
       <button onclick="logout()" class="nav-btn btn-logout" style="margin-top:auto;">登出系統</button>
@@ -45,44 +46,61 @@
       </div>
     </div>
 
-    <!-- 2：儀表板區塊 (拆分待辦與預約) -->
-    <div id="view-dashboard" class="view-section" style="display:none;">
+    <!-- 2：學習護照總覽 (雙方共用：儀表板與近期動態) -->
+    <div id="view-passport" class="view-section" style="display:none;">
+      <h2 class="section-title" style="color:var(--primary-color);">📖 學習護照總覽</h2>
       
-      <!-- 待辦事項 (未完成/退回) -->
-      <div id="todo-section" style="display:none; margin-bottom: 30px;">
-        <h2 class="section-title" style="color:#e11d48; border-bottom-color:#e11d48;">📌 待辦與未完成</h2>
-        <div id="todo-list-container"></div>
+      <!-- 頂部儀表板 -->
+      <div style="display:flex; gap:15px; margin-bottom: 30px; flex-wrap:wrap;">
+        <div class="question-block" style="flex:1; background:#dcfce7; border-left:5px solid #166534; padding:20px; border-radius:8px; margin-bottom:0; min-width: 120px;">
+          <div style="font-size:14px; color:#166534; font-weight:bold;">已結案</div>
+          <div id="metric-completed" style="font-size:32px; font-weight:bold; color:#14532d;">0</div>
+        </div>
+        <div class="question-block" style="flex:1; background:#e0f2fe; border-left:5px solid #0284c7; padding:20px; border-radius:8px; margin-bottom:0; min-width: 120px;">
+          <div style="font-size:14px; color:#0284c7; font-weight:bold;">預約中</div>
+          <div id="metric-appt" style="font-size:32px; font-weight:bold; color:#0c4a6e;">0</div>
+        </div>
+        <div class="question-block" style="flex:1; background:#ffe4e6; border-left:5px solid #e11d48; padding:20px; border-radius:8px; margin-bottom:0; min-width: 120px;">
+          <div style="font-size:14px; color:#e11d48; font-weight:bold;">未完成待辦</div>
+          <div id="metric-pending" style="font-size:32px; font-weight:bold; color:#9f1239;">0</div>
+        </div>
       </div>
 
-      <!-- 預約事項 -->
-      <div id="appointment-section" style="display:none; margin-bottom: 40px;">
-        <h2 class="section-title" style="color:#0284c7; border-bottom-color:#0284c7;">⏰ 我的近期預約</h2>
-        <div id="appointment-list-container"></div>
-      </div>
-      
-      <h2 class="section-title">學習護照項目</h2>
+      <h3 style="color:#475569; border-bottom: 2px solid #cbd5e1; padding-bottom: 8px;">最近更新動態</h3>
+      <div id="passport-recent-list"></div>
+    </div>
+
+    <!-- 3：考核表單區塊 (僅老師可見：發起問卷與預約) -->
+    <div id="view-forms" class="view-section" style="display:none;">
+      <h2 class="section-title">📝 發起考核表單</h2>
       <div id="theme-buttons-container" class="theme-grid"></div>
       <h3 class="section-title" id="selected-theme-title" style="display:none; margin-top:30px;">請選擇考核項目</h3>
       <div id="template-list-container" class="template-list"></div>
     </div>
 
-    <!-- 3：行事曆區塊 (歷史紀錄與所有預約) -->
+    <!-- 4：行事曆區塊 (歷史紀錄與所有預約 分類呈現) -->
     <div id="view-calendar" class="view-section" style="display:none;">
-      <h2 class="section-title" style="color:var(--primary-color);">📅 歷史紀錄與所有預約</h2>
-      <div class="question-block">
-        <p style="color:#666; font-size:14px; margin-top:0; margin-bottom:20px;">此處顯示您參與過的所有已結案紀錄與未來的預約安排。</p>
-        <div id="calendar-list-container"></div>
-      </div>
+      <h2 class="section-title" style="color:var(--primary-color);">📅 預約與行事曆</h2>
+      <p style="color:#666; font-size:14px; margin-bottom:25px;">在此檢視您參與過的所有狀態紀錄，點選卡片可進入對應表單。</p>
+      
+      <h3 style="color:#e11d48; margin-top:10px; border-bottom:2px solid #e11d48; padding-bottom:5px;">📌 未完成 (待辦)</h3>
+      <div id="cal-pending-list" style="margin-bottom: 30px;"></div>
+
+      <h3 style="color:#0284c7; margin-top:10px; border-bottom:2px solid #0284c7; padding-bottom:5px;">⏰ 預約中</h3>
+      <div id="cal-appt-list" style="margin-bottom: 30px;"></div>
+
+      <h3 style="color:#166534; margin-top:10px; border-bottom:2px solid #166534; padding-bottom:5px;">✅ 已結案 (僅供檢視)</h3>
+      <div id="cal-completed-list" style="margin-bottom: 30px;"></div>
     </div>
 
-    <!-- 4：問卷填寫區塊 -->
+    <!-- 5：問卷填寫區塊 -->
     <div id="view-form" class="view-section" style="display:none;">
-      <button onclick="backToDashboard(false)" class="btn-secondary" style="margin-bottom: 20px; display: inline-block; padding: 8px 16px; width: auto;">← 返回主題列表</button>
+      <button onclick="openPassport(false)" class="btn-secondary" style="margin-bottom: 20px; display: inline-block; padding: 8px 16px; width: auto;">← 返回</button>
       <h2 id="form-title" style="margin-top:0;"></h2>
       <div id="questions-container"></div>
     </div>
 
-    <!-- 5：學習分析區塊 (加入身分切換按鈕) -->
+    <!-- 6：學習分析區塊 -->
     <div id="view-analytics" class="view-section" style="display:none;">
       <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid var(--secondary-color); padding-bottom: 10px; margin-bottom: 25px; flex-wrap: wrap; gap: 10px;">
         <h2 style="color:var(--secondary-color); margin:0;">📊 我的學習分析雷達圖</h2>
