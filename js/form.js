@@ -10,16 +10,11 @@ async function openForm(templateId) {
   currentTemplateId = templateId;
   window.currentQuestionsData = [];
   
-  if (!currentRecordId) {
-    currentSavedAnswers = {};
-    currentAttemptCount = 0;
-  }
-
+  if (!currentRecordId) { currentSavedAnswers = {}; currentAttemptCount = 0; }
   if (timerRaf['ass']) cancelAnimationFrame(timerRaf['ass']);
   if (timerRaf['fb']) cancelAnimationFrame(timerRaf['fb']);
   timerStates['ass'] = { isRunning: false, start: null, elapsed: 0 };
   timerStates['fb'] = { isRunning: false, start: null, elapsed: 0 };
-
   if (autoSaveInterval) clearInterval(autoSaveInterval);
   canvases = {};
 
@@ -36,21 +31,22 @@ async function openForm(templateId) {
 
   switchView('view-form');
   document.getElementById('view-form').innerHTML = `
-    <button onclick="backToDashboard()" class="btn-secondary" style="margin-bottom: 20px; display: inline-block; padding: 8px 16px; width: auto;">← 返回主題列表</button>
-    <h2 id="form-title" style="margin-top:0;">題目載入中...</h2>
-    <div id="questions-container">
-      <div style="padding:30px; text-align:center; color:#666;">⏳ 題目生成中...</div>
-    </div>
+    <button onclick="backToDashboard(false)" class="btn-secondary" style="margin-bottom: 20px; display: inline-block; padding: 8px 16px; width: auto;">← 返回主題列表</button>
+    <h2 id="form-title" style="margin-top:0;">畫面產生中...</h2>
+    <div id="questions-container"><div style="padding:30px; text-align:center; color:#666;">⏳ 組合資料中...</div></div>
   `;
 
-  const res = await callGAS('getTemplateData', { templateId, empId: currentUser.empId });
-  if (res.status === 'error') { 
-    alert("❌ " + res.message); 
-    backToDashboard(); 
-    return; 
-  }
+  // 🌟 直接從登入時的快取拿資料，不發 API！
+  const templateInfo = allTemplates.find(t => t.templateId === templateId);
+  if (!templateInfo) { alert("找不到指定的模板資料。"); backToDashboard(false); return; }
   
-  renderForm(res);
+  const templateData = JSON.parse(JSON.stringify(templateInfo)); // 深拷貝
+  templateData.questions = globalQuestions.filter(q => q.templateId === templateId);
+
+  // 極短暫延遲讓畫面有流暢感
+  setTimeout(() => {
+    renderForm({ status: 'success', data: templateData });
+  }, 50);
 }
 
 // ==========================================
@@ -378,7 +374,7 @@ async function submitExamHandler(actionType) {
   if (res.status === 'success') {
     alert("🎉 " + res.message);
     localStorage.removeItem(`draft_${currentUser.empId}_${currentTemplateId}`);
-    backToDashboard(); 
+    backToDashboard(true); // 🌟 改成 true，送出後強制刷新任務列表
   } else {
     alert("錯誤：" + res.message);
     submitBtn.disabled = false;
