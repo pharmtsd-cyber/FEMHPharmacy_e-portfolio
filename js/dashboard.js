@@ -11,6 +11,7 @@ async function backToDashboard(forceRefresh = false) {
     document.getElementById('template-list-container').innerHTML = '';
     document.getElementById('selected-theme-title').style.display = 'none';
     document.getElementById('todo-section').style.display = 'none';
+    document.getElementById('appointment-section').style.display = 'none';
 
     // 🌟 如果是重新整理，使用輕量 API (因為已登入)
     const res = await callGAS(forceRefresh && isDashboardLoaded ? 'getDashboardInit' : 'loginAndInit', { empId: currentUser.empId });
@@ -20,7 +21,7 @@ async function backToDashboard(forceRefresh = false) {
       globalQuestions = res.allQuestions || []; 
       globalDopsQuestions = res.dopsCommonQs || []; // 存入快取
       globalTasks = res.tasks || [];
-      allTemplates = res.templates || [];
+      if(!isDashboardLoaded) allTemplates = res.templates || [];
       isDashboardLoaded = true;
     } else {
       document.getElementById('theme-buttons-container').innerHTML = '<p style="color:red;">載入失敗，請檢查網路連線後重新登入</p>';
@@ -36,8 +37,6 @@ async function backToDashboard(forceRefresh = false) {
     document.getElementById('theme-buttons-container').style.display = 'none';
     document.getElementById('template-list-container').style.display = 'none';
     document.getElementById('selected-theme-title').style.display = 'none';
-    
-    // 隱藏「學習護照項目」的標題 (透過前一個元素定位)
     const passportTitle = document.getElementById('theme-buttons-container').previousElementSibling;
     if (passportTitle && passportTitle.tagName === 'H2') passportTitle.style.display = 'none';
   } else {
@@ -57,9 +56,8 @@ async function backToDashboard(forceRefresh = false) {
   renderTodoList(globalTasks);
 }
 
-let currentAppointTemplate = ""; // 暫存正在預約的表單ID
+let currentAppointTemplate = "";
 
-// 1. 列表渲染 (加入「預約」與「填寫」雙按鈕)
 function filterTemplatesByTheme(selectedTheme) {
   document.getElementById('selected-theme-title').innerText = `【${selectedTheme}】 包含以下項目：`; 
   document.getElementById('selected-theme-title').style.display = 'block';
@@ -80,7 +78,6 @@ function filterTemplatesByTheme(selectedTheme) {
   document.getElementById('template-list-container').innerHTML = listHTML;
 }
 
-// 2. 待辦事項拆分 (未完成 vs 預約)
 function renderTodoList(tasks) {
   globalTasks = tasks; 
   const todoContainer = document.getElementById('todo-list-container'); 
@@ -89,10 +86,12 @@ function renderTodoList(tasks) {
   let todoHtml = ''; let apptHtml = '';
 
   globalTasks.forEach((task, index) => {
+    // 過濾掉已結案的
+    if (task.status === '已結案') return;
+
     const templateInfo = allTemplates.find(t => t.templateId === task.templateId);
     const title = templateInfo ? templateInfo.title : "未知項目";
     
-    // 預約項目
     if (task.status === '預約中') {
       apptHtml += `
         <div class="template-item" style="border-left: 5px solid #0284c7;" onclick="resumeTaskByIndex(${index})">
@@ -100,11 +99,9 @@ function renderTodoList(tasks) {
             <div class="template-title">${title} <span class="status-badge status-appt">⏰ 預約排程</span></div>
             <div class="template-desc">預約時間：${task.time} <br>對象：${task.studentName || task.teacherId}</div>
           </div>
-          <div style="color:#0284c7; font-weight:bold; width:100%; text-align:right;">進入表單 ➔</div>
+          <div style="color:#0284c7; font-weight:bold; white-space:nowrap;">進入表單 ➔</div>
         </div>`;
-    } 
-    // 待辦與暫存項目
-    else if (task.status !== '已結案') {
+    } else {
       const badgeClass = task.status === '老師暫存' ? 'status-draft' : 'status-pending';
       todoHtml += `
         <div class="template-item" style="border-left: 5px solid #e11d48;" onclick="resumeTaskByIndex(${index})">
@@ -112,7 +109,7 @@ function renderTodoList(tasks) {
             <div class="template-title">${title} <span class="status-badge ${badgeClass}">${task.status}</span></div>
             <div class="template-desc">第 ${task.attempt} 次評估 ｜ 最後更新：${task.time}</div>
           </div>
-          <div style="color:#e11d48; font-weight:bold; width:100%; text-align:right;">繼續填寫 ➔</div>
+          <div style="color:#e11d48; font-weight:bold; white-space:nowrap;">繼續填寫 ➔</div>
         </div>`;
     }
   });
@@ -124,7 +121,6 @@ function renderTodoList(tasks) {
   document.getElementById('appointment-section').style.display = apptHtml ? 'block' : 'none';
 }
 
-// 3. 預約 Modal 邏輯
 function openAppointmentModal(templateId, title) {
   currentAppointTemplate = templateId;
   document.getElementById('appoint-template-name').innerText = title;
@@ -144,7 +140,6 @@ async function submitAppointment() {
   const target = document.getElementById('appoint-target').value;
   if(!dt || !target) return alert('請完整填寫時間與對象！');
   
-  // 借用 form 的送出邏輯，發送 actionType='appointment'
   const payload = {
     recordId: "", userId: currentUser.empId, userName: currentUser.name, 
     studentId: target.split('-')[0].trim(), templateId: currentAppointTemplate, 
@@ -152,23 +147,27 @@ async function submitAppointment() {
     teacherSignature: "", studentSignature: ""
   };
 
+  const originalText = event.target.innerText;
+  event.target.innerText = '處理中...';
+  event.target.disabled = true;
+
   const res = await callGAS('submitExam', { payload });
   if (res.status === 'success') {
     alert("✅ 預約已成功建立！");
     closeAppointmentModal();
-    backToDashboard(true); // 強制刷新
+    backToDashboard(true); 
   } else {
     alert("錯誤：" + res.message);
+    event.target.innerText = originalText;
+    event.target.disabled = false;
   }
 }
 
-// 4. 行事曆頁面邏輯
 function openCalendar() {
   updateNavState('tab-calendar');
   switchView('view-calendar');
   
   let calHtml = '';
-  // 將 globalTasks 依時間排序 (越新的在越上面)
   const sortedTasks = [...globalTasks].sort((a,b) => new Date(b.time) - new Date(a.time));
   
   sortedTasks.forEach((task, index) => {
@@ -185,7 +184,7 @@ function openCalendar() {
           <div class="template-title">${icon} ${title} <span class="status-badge ${badgeClass}">${task.status}</span></div>
           <div class="template-desc">${task.time} ｜ 對象：${task.studentName || task.teacherId}</div>
         </div>
-        <div style="color:#64748b; font-size:14px; text-align:right;">檢視 ➔</div>
+        <div style="color:#64748b; font-size:14px; white-space:nowrap; text-align:right;">檢視 ➔</div>
       </div>`;
   });
   
@@ -201,5 +200,7 @@ function resumeTaskByIndex(index) {
   currentSavedAnswers.teacherSignature = task.teacherSignature;
   currentSavedAnswers.studentSignature = task.studentSignature;
   updateNavState(''); 
+  
+  // 切換時如果是在行事曆頁面，直接覆蓋畫面
   openForm(task.templateId);             
 }
