@@ -22,7 +22,8 @@
 
   <nav id="sidebar" class="sidebar">
     <div class="sidebar-content">
-      <button onclick="backToDashboard()" class="nav-btn" id="tab-dashboard">📝 學習護照</button>
+      <button onclick="backToDashboard(true)" class="nav-btn active" id="tab-dashboard">📝 學習護照</button>
+      <button onclick="openCalendar()" class="nav-btn" id="tab-calendar">📅 預約與行事曆</button>
       <button onclick="openAnalytics()" class="nav-btn" id="tab-analytics">📊 學習分析</button>
       <button onclick="logout()" class="nav-btn btn-logout" style="margin-top:auto;">登出系統</button>
     </div>
@@ -30,7 +31,7 @@
 
   <div class="main-container">
     
-    <!-- 1：登入區塊 (更新為雙按鈕直覺登入) -->
+    <!-- 1：登入區塊 -->
     <div id="view-login" class="view-section active">
       <div class="login-card">
         <h2>系統登入</h2>
@@ -44,11 +45,19 @@
       </div>
     </div>
 
-    <!-- 2：儀表板區塊 -->
+    <!-- 2：儀表板區塊 (拆分待辦與預約) -->
     <div id="view-dashboard" class="view-section" style="display:none;">
-      <div id="todo-section" style="display:none; margin-bottom: 40px;">
-        <h2 class="section-title" style="color:#e11d48; border-bottom-color:#e11d48;">📌 我的待辦事項</h2>
+      
+      <!-- 待辦事項 (未完成/退回) -->
+      <div id="todo-section" style="display:none; margin-bottom: 30px;">
+        <h2 class="section-title" style="color:#e11d48; border-bottom-color:#e11d48;">📌 待辦與未完成</h2>
         <div id="todo-list-container"></div>
+      </div>
+
+      <!-- 預約事項 -->
+      <div id="appointment-section" style="display:none; margin-bottom: 40px;">
+        <h2 class="section-title" style="color:#0284c7; border-bottom-color:#0284c7;">⏰ 我的近期預約</h2>
+        <div id="appointment-list-container"></div>
       </div>
       
       <h2 class="section-title">學習護照項目</h2>
@@ -57,16 +66,31 @@
       <div id="template-list-container" class="template-list"></div>
     </div>
 
-    <!-- 3：問卷填寫區塊 -->
+    <!-- 3：行事曆區塊 (歷史紀錄與所有預約) -->
+    <div id="view-calendar" class="view-section" style="display:none;">
+      <h2 class="section-title" style="color:var(--primary-color);">📅 歷史紀錄與所有預約</h2>
+      <div class="question-block">
+        <p style="color:#666; font-size:14px; margin-top:0; margin-bottom:20px;">此處顯示您參與過的所有已結案紀錄與未來的預約安排。</p>
+        <div id="calendar-list-container"></div>
+      </div>
+    </div>
+
+    <!-- 4：問卷填寫區塊 -->
     <div id="view-form" class="view-section" style="display:none;">
-      <button onclick="backToDashboard()" class="btn-secondary">← 返回主題列表</button>
-      <h2 id="form-title" style="margin-top:20px;"></h2>
+      <button onclick="backToDashboard(false)" class="btn-secondary" style="margin-bottom: 20px; display: inline-block; padding: 8px 16px; width: auto;">← 返回主題列表</button>
+      <h2 id="form-title" style="margin-top:0;"></h2>
       <div id="questions-container"></div>
     </div>
 
-    <!-- 4：學習分析區塊 -->
+    <!-- 5：學習分析區塊 (加入身分切換按鈕) -->
     <div id="view-analytics" class="view-section" style="display:none;">
-      <h2 class="section-title" style="color:var(--secondary-color); border-bottom-color:var(--secondary-color);">📊 我的學習分析雷達圖</h2>
+      <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid var(--secondary-color); padding-bottom: 10px; margin-bottom: 25px; flex-wrap: wrap; gap: 10px;">
+        <h2 style="color:var(--secondary-color); margin:0;">📊 我的學習分析雷達圖</h2>
+        <div style="display: flex; gap: 10px; background: #f1f5f9; padding: 5px; border-radius: 8px;">
+          <button id="btn-ana-student" class="btn-primary" style="padding: 8px 16px; margin:0;" onclick="switchAnalyticsRole('student')">🎓 作為學生</button>
+          <button id="btn-ana-teacher" class="btn-secondary" style="padding: 8px 16px; margin:0;" onclick="switchAnalyticsRole('teacher')">🧑‍🏫 作為教師</button>
+        </div>
+      </div>
       <div id="analytics-empty-msg" style="display:none; text-align:center; padding: 50px 20px; color:#666; font-size:18px; background:white; border-radius:10px; border:1px dashed #cbd5e1;">
         載入統計資料中...
       </div>
@@ -82,6 +106,26 @@
       </div>
     </div>
 
+  </div>
+
+  <!-- 預約設定彈出視窗 (Modal) -->
+  <div id="appointment-modal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.6); z-index:1000; justify-content:center; align-items:center;">
+    <div style="background:white; padding:25px; border-radius:12px; width:90%; max-width:400px; box-shadow: 0 10px 25px rgba(0,0,0,0.2);">
+      <h3 style="margin-top:0; color:var(--primary-color);">📅 新增預約</h3>
+      <p id="appoint-template-name" style="font-weight:bold; color:#0284c7; font-size:15px; margin-bottom:15px; line-height: 1.4;"></p>
+      
+      <label style="display:block; margin:10px 0 5px; padding:0; background:none; border:none; font-weight:bold;">預約日期與時間：</label>
+      <input type="datetime-local" id="appoint-datetime" style="width:100%; margin-bottom:15px;">
+      
+      <label style="display:block; margin:10px 0 5px; padding:0; background:none; border:none; font-weight:bold;">對象 (教師或學生)：</label>
+      <input type="text" id="appoint-target" list="appoint-user-list" placeholder="請搜尋輸入員工編號或姓名..." style="width:100%; margin-bottom:25px;">
+      <datalist id="appoint-user-list"></datalist>
+      
+      <div style="display:flex; gap:15px;">
+        <button class="btn-secondary" style="flex:1;" onclick="closeAppointmentModal()">取消</button>
+        <button class="btn-primary" style="flex:1;" onclick="submitAppointment()">確認預約</button>
+      </div>
+    </div>
   </div>
 
   <script src="js/globals.js"></script>
