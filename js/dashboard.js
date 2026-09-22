@@ -6,40 +6,54 @@ async function backToDashboard(forceRefresh = false) {
   updateNavState('tab-dashboard');
   switchView('view-dashboard'); 
   
-  // 如果還沒載入過，或是強制重新整理，才去呼叫 API
   if (!isDashboardLoaded || forceRefresh) {
     document.getElementById('theme-buttons-container').innerHTML = '<div style="padding: 30px; text-align: center; color:#666; grid-column: 1 / -1;">⏳ 與伺服器同步最新資料中 (約需 3~5 秒)...</div>';
     document.getElementById('template-list-container').innerHTML = '';
     document.getElementById('selected-theme-title').style.display = 'none';
     document.getElementById('todo-section').style.display = 'none';
 
-    const res = await callGAS('getDashboardInit', { empId: currentUser.empId });
+    // 🌟 如果是重新整理，使用輕量 API (因為已登入)
+    const res = await callGAS(forceRefresh && isDashboardLoaded ? 'getDashboardInit' : 'loginAndInit', { empId: currentUser.empId });
     
     if (res && res.status === 'success') {
       globalHistoryCounts = res.historyCounts || {}; 
-      globalQuestions = res.allQuestions || []; // 一次性載入所有題目
+      globalQuestions = res.allQuestions || []; 
+      globalDopsQuestions = res.dopsCommonQs || []; // 存入快取
       globalTasks = res.tasks || [];
-      
-      const userRolesStr = [currentUser.role, currentUser.specialRole].filter(Boolean).join(' ');
-      allTemplates = res.templates.filter(t => {
-        if (!t.allowedRoles || t.allowedRoles.trim() === "") return true;
-        const allowedArr = t.allowedRoles.split(',').map(r => r.trim());
-        return allowedArr.some(r => userRolesStr.includes(r));
-      });
-      isDashboardLoaded = true; // 標記快取完成
+      allTemplates = res.templates || [];
+      isDashboardLoaded = true;
     } else {
-      document.getElementById('theme-buttons-container').innerHTML = '<p style="color:red;">載入失敗，請檢查權限後重新整理</p>';
+      document.getElementById('theme-buttons-container').innerHTML = '<p style="color:red;">載入失敗，請檢查網路連線後重新登入</p>';
       return;
     }
   }
 
-  // 從快取中渲染畫面，速度極快
-  const allowedThemes = new Set(allTemplates.map(t => t.theme));
-  let themeHTML = '';
-  if (allowedThemes.size === 0) themeHTML = '<p style="color:#e11d48; text-align:center; grid-column: 1 / -1;">您目前沒有開放的考核項目</p>';
-  else allowedThemes.forEach(theme => themeHTML += `<div class="theme-card" onclick="filterTemplatesByTheme('${theme}')">${theme}</div>`);
-  document.getElementById('theme-buttons-container').innerHTML = themeHTML;
+  // 🌟 核心邏輯：判斷是否為學生 (包含學生、實習生)
+  const isStudentUser = [currentUser.role, currentUser.specialRole].join(' ').includes('學生') || [currentUser.role, currentUser.specialRole].join(' ').includes('實習生');
 
+  if (isStudentUser) {
+    // 學生視角：隱藏發起問卷的區塊
+    document.getElementById('theme-buttons-container').style.display = 'none';
+    document.getElementById('template-list-container').style.display = 'none';
+    document.getElementById('selected-theme-title').style.display = 'none';
+    
+    // 隱藏「學習護照項目」的標題 (透過前一個元素定位)
+    const passportTitle = document.getElementById('theme-buttons-container').previousElementSibling;
+    if (passportTitle && passportTitle.tagName === 'H2') passportTitle.style.display = 'none';
+  } else {
+    // 老師視角：顯示所有模板分類
+    document.getElementById('theme-buttons-container').style.display = 'grid';
+    const passportTitle = document.getElementById('theme-buttons-container').previousElementSibling;
+    if (passportTitle && passportTitle.tagName === 'H2') passportTitle.style.display = 'block';
+
+    const allowedThemes = new Set(allTemplates.map(t => t.theme));
+    let themeHTML = '';
+    if (allowedThemes.size === 0) themeHTML = '<p style="color:#e11d48; text-align:center; grid-column: 1 / -1;">目前系統尚無啟用的考核項目</p>';
+    else allowedThemes.forEach(theme => themeHTML += `<div class="theme-card" onclick="filterTemplatesByTheme('${theme}')">${theme}</div>`);
+    document.getElementById('theme-buttons-container').innerHTML = themeHTML;
+  }
+
+  // 雙方都會看到待辦與預約清單
   renderTodoList(globalTasks);
 }
 
