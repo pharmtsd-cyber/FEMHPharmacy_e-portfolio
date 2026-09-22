@@ -2,17 +2,27 @@ async function handleLogin(mode) {
   const empId = document.getElementById('login-empid').value.trim();
   if (!empId) return alert('請輸入員工編號');
   
-  // 直接套用傳進來的 mode ('web' 或 'mobile')
   document.body.className = `layout-${mode}`;
   
-  // 鎖定所有按鈕防呆
+  // 🌟 鎖定按鈕並顯示載入中，避免使用者以為當機重複點擊
   const buttons = document.querySelectorAll('.login-card button');
-  buttons.forEach(b => { b.disabled = true; b.style.opacity = '0.7'; });
+  const originalTexts = [];
+  buttons.forEach((b, i) => { 
+    originalTexts.push(b.innerText);
+    b.disabled = true; 
+    b.style.opacity = '0.7'; 
+    b.innerText = '⏳ 登入並載入題庫中...';
+  });
   
-  const res = await callGAS('userLogin', { empId: empId });
+  // 🌟 改呼叫合併的 API，大幅減少等待時間
+  const res = await callGAS('loginAndInit', { empId: empId });
   
-  // 解除鎖定
-  buttons.forEach(b => { b.disabled = false; b.style.opacity = '1'; });
+  // 恢復按鈕狀態
+  buttons.forEach((b, i) => { 
+    b.disabled = false; 
+    b.style.opacity = '1'; 
+    b.innerText = originalTexts[i]; 
+  });
 
   if (res.status === 'success') {
     currentUser = res.user; globalUserList = res.userList; 
@@ -22,14 +32,26 @@ async function handleLogin(mode) {
     document.getElementById('user-info-display').style.display = 'block'; 
     document.getElementById('hamburger-btn').style.display = 'block'; 
     
-    backToDashboard(true);
+    // 🌟 登入時直接把全域變數塞滿，後續跳轉就不會再發送任何 API
+    globalHistoryCounts = res.historyCounts || {}; 
+    globalQuestions = res.allQuestions || []; 
+    globalTasks = res.tasks || [];
+    
+    const userRolesStr = [currentUser.role, currentUser.specialRole].filter(Boolean).join(' ');
+    allTemplates = res.templates.filter(t => {
+      if (!t.allowedRoles || t.allowedRoles.trim() === "") return true;
+      const allowedArr = t.allowedRoles.split(',').map(r => r.trim());
+      return allowedArr.some(r => userRolesStr.includes(r));
+    });
+    
+    isDashboardLoaded = true; // 標記為已快取
+    backToDashboard(false);   // 傳入 false 代表不要重新發送請求
   } else { 
     alert(res.message); 
   }
 }
 
 function logout() {
-  // 🌟 1. 徹底清空所有全域變數與記憶體，防止不同身分互相干擾
   currentUser = null; currentRecordId = ""; currentSavedAnswers = {}; currentTemplateId = "";
   globalUserList = []; globalTasks = []; allTemplates = [];
   if (timerRaf['ass']) cancelAnimationFrame(timerRaf['ass']);
@@ -37,14 +59,12 @@ function logout() {
   isDashboardLoaded = false; globalQuestions = [];
   if (autoSaveInterval) clearInterval(autoSaveInterval);
 
-  // 🌟 2. 還原登入畫面與側邊欄狀態
   document.getElementById('login-empid').value = ''; 
   document.getElementById('user-info-display').style.display = 'none';
   document.getElementById('hamburger-btn').style.display = 'none'; 
   document.getElementById('sidebar').classList.remove('open');
   document.body.classList.remove('sidebar-open');
   
-  // 🌟 3. 強制洗白所有動態生成的畫面，避免看到前一個人的殘影
   document.getElementById('theme-buttons-container').innerHTML = '';
   document.getElementById('template-list-container').innerHTML = '';
   document.getElementById('todo-section').style.display = 'none';
@@ -54,6 +74,5 @@ function logout() {
   if (chartAcgmeInstance) chartAcgmeInstance.destroy();
   if (chartUnitInstance) chartUnitInstance.destroy();
   
-  // 🌟 4. 切換回登入區塊
   switchView('view-login');
 }
