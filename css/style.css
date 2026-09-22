@@ -115,3 +115,30 @@ body.layout-mobile input[type="radio"], body.layout-mobile input[type="checkbox"
 
 /* 簽名板寬度適應 */
 body.layout-mobile .sig-pad { max-width: 100%; height: 180px; }
+
+/* 1. 修正列表卡片的 RWD (手機改垂直，電腦改水平) */
+.template-item { 
+  display: flex; 
+  flex-direction: column; 
+  gap: 12px; 
+  align-items: flex-start; 
+}
+@media (min-width: 768px) {
+  .template-item { flex-direction: row; align-items: center; }
+}
+.template-item > div:first-child { flex: 1; width: 100%; }
+.template-title { font-size: 17px; word-break: break-word; line-height: 1.4; }
+.template-desc { font-size: 14px; color: #666; margin-top: 6px; line-height: 1.5; word-break: break-word; }
+
+/* 2. 操作按鈕群組優化 (加入預約與填寫雙按鈕) */
+.action-group {
+  display: flex; gap: 10px; width: 100%; justify-content: flex-end;
+}
+@media (max-width: 767px) {
+  .action-group { flex-direction: column; }
+  .action-group button { width: 100%; padding: 12px; }
+}
+
+/* 3. 狀態標籤美化 */
+.status-appt { background: #e0f2fe; color: #0284c7; }
+.status-closed { background: #dcfce7; color: #166534; }
