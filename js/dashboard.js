@@ -6,6 +6,7 @@ async function backToDashboard(forceRefresh = false) {
   updateNavState('tab-dashboard');
   switchView('view-dashboard'); 
   
+  // 如果還沒載入過，或是強制重新整理，才去呼叫 API
   if (!isDashboardLoaded || forceRefresh) {
     document.getElementById('theme-buttons-container').innerHTML = '<div style="padding: 30px; text-align: center; color:#666;">⏳ 載入模組與待辦事項中...</div>';
     document.getElementById('template-list-container').innerHTML = '';
@@ -16,7 +17,7 @@ async function backToDashboard(forceRefresh = false) {
     
     if (res && res.status === 'success') {
       globalHistoryCounts = res.historyCounts || {}; 
-      globalQuestions = res.allQuestions || []; // 🌟 一次性載入所有題目
+      globalQuestions = res.allQuestions || []; // 一次性載入所有題目
       globalTasks = res.tasks || [];
       
       const userRolesStr = [currentUser.role, currentUser.specialRole].filter(Boolean).join(' ');
@@ -25,7 +26,7 @@ async function backToDashboard(forceRefresh = false) {
         const allowedArr = t.allowedRoles.split(',').map(r => r.trim());
         return allowedArr.some(r => userRolesStr.includes(r));
       });
-      isDashboardLoaded = true; // 🌟 標記快取完成
+      isDashboardLoaded = true; // 標記快取完成
     } else {
       document.getElementById('theme-buttons-container').innerHTML = '<p style="color:red;">載入失敗，請檢查權限後重新整理</p>';
       return;
@@ -40,4 +41,48 @@ async function backToDashboard(forceRefresh = false) {
   document.getElementById('theme-buttons-container').innerHTML = themeHTML;
 
   renderTodoList(globalTasks);
+}
+
+function filterTemplatesByTheme(selectedTheme) {
+  document.getElementById('selected-theme-title').innerText = `【${selectedTheme}】 包含以下項目：`; 
+  document.getElementById('selected-theme-title').style.display = 'block';
+  let listHTML = '';
+  allTemplates.filter(t => t.theme === selectedTheme).forEach(t => {
+    listHTML += `<div class="template-item" onclick="openForm('${t.templateId}')">
+        <div><div class="template-title">${t.title}</div><div class="template-desc">${t.description}</div></div>
+        <div style="color:#009688; font-weight:bold;">填寫 ➔</div></div>`;
+  });
+  document.getElementById('template-list-container').innerHTML = listHTML;
+}
+
+function renderTodoList(tasks) {
+  globalTasks = tasks; 
+  const container = document.getElementById('todo-list-container'); 
+  const section = document.getElementById('todo-section');
+  
+  if (!globalTasks || globalTasks.length === 0) { section.style.display = 'none'; return; }
+  
+  let html = '';
+  globalTasks.forEach((task, index) => {
+    const templateInfo = allTemplates.find(t => t.templateId === task.templateId);
+    const title = templateInfo ? templateInfo.title : "未知項目";
+    const badgeClass = task.status === '老師暫存' ? 'status-draft' : 'status-pending';
+    html += `<div class="template-item" style="border-left: 5px solid #e11d48;" onclick="resumeTaskByIndex(${index})">
+        <div><div class="template-title">${title} <span class="status-badge ${badgeClass}">${task.status}</span></div>
+        <div class="template-desc">第 ${task.attempt} 次評估 ｜ 最後更新：${task.time}</div></div>
+        <div style="color:#e11d48; font-weight:bold;">繼續填寫 ➔</div></div>`;
+  });
+  container.innerHTML = html; section.style.display = 'block';
+}
+
+function resumeTaskByIndex(index) {
+  const task = globalTasks[index]; if (!task) return;
+  currentRecordId = task.recordId; 
+  currentAttemptCount = task.attempt || 0; 
+  currentTaskStatus = task.status || ""; 
+  currentSavedAnswers = task.answers; 
+  currentSavedAnswers.teacherSignature = task.teacherSignature;
+  currentSavedAnswers.studentSignature = task.studentSignature;
+  updateNavState(''); 
+  openForm(task.templateId);             
 }
