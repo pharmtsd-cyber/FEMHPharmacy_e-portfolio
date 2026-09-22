@@ -44,7 +44,7 @@ async function handleLogin(mode) {
     });
     
     isDashboardLoaded = true; // 標記為已快取
-    backToDashboard(false);   // 傳入 false 代表不要重新發送請求
+    openPassport(false);      // 🌟 跳轉到學習護照總覽
   } else { 
     alert(res.message); 
   }
@@ -64,6 +64,7 @@ function logout() {
   document.getElementById('sidebar').classList.remove('open');
   document.body.classList.remove('sidebar-open');
   
+  // 清洗所有的動態列表與畫面
   document.getElementById('theme-buttons-container').innerHTML = '';
   document.getElementById('template-list-container').innerHTML = '';
   document.getElementById('todo-section').style.display = 'none';
@@ -71,6 +72,13 @@ function logout() {
   document.getElementById('appointment-section').style.display = 'none';
   document.getElementById('appointment-list-container').innerHTML = '';
   document.getElementById('questions-container').innerHTML = '';
+  
+  // 🌟 確保新分頁的紀錄也確實清空
+  document.getElementById('passport-recent-list').innerHTML = '';
+  document.getElementById('cal-pending-list').innerHTML = '';
+  document.getElementById('cal-appt-list').innerHTML = '';
+  document.getElementById('cal-completed-list').innerHTML = '';
+
   document.getElementById('analytics-charts-container').style.display = 'none';
   if (chartAcgmeInstance) chartAcgmeInstance.destroy();
   if (chartUnitInstance) chartUnitInstance.destroy();
