@@ -1,11 +1,5 @@
-// ==========================================
-// 全域變數供摘要功能讀取
-// ==========================================
 window.currentQuestionsData = [];
 
-// ==========================================
-// 1. 表單初始化與載入 (前端動態組合)
-// ==========================================
 async function openForm(templateId) {
   currentTemplateId = templateId;
   window.currentQuestionsData = [];
@@ -31,20 +25,17 @@ async function openForm(templateId) {
 
   switchView('view-form');
   document.getElementById('view-form').innerHTML = `
-    <button onclick="backToDashboard(false)" class="btn-secondary" style="margin-bottom: 20px; display: inline-block; padding: 8px 16px; width: auto;">← 返回列表</button>
+    <button onclick="openPassport(false)" class="btn-secondary" style="margin-bottom: 20px; display: inline-block; padding: 8px 16px; width: auto;">← 返回</button>
     <h2 id="form-title" style="margin-top:0;">畫面產生中...</h2>
     <div id="questions-container"><div style="padding:30px; text-align:center; color:#666;">⏳ 組合資料中...</div></div>
   `;
 
   const templateInfo = allTemplates.find(t => t.templateId === templateId);
-  if (!templateInfo) { alert("找不到指定的模板資料。"); backToDashboard(false); return; }
+  if (!templateInfo) { alert("找不到指定的模板資料。"); openPassport(false); return; }
   
-  const templateData = JSON.parse(JSON.stringify(templateInfo)); // 深拷貝防污染
-  
-  // 🌟 從快取抓取該表單的一般題目
+  const templateData = JSON.parse(JSON.stringify(templateInfo)); 
   const baseQuestions = globalQuestions.filter(q => q.templateId === templateId);
 
-  // 🌟 若為 DOPS，前端瞬間將「DOPS 公版題目」接在最後面，省下大量網路傳輸時間
   if (templateData.title.toUpperCase().includes('DOPS')) {
     templateData.questions = [...baseQuestions, ...globalDopsQuestions];
   } else {
@@ -56,9 +47,6 @@ async function openForm(templateId) {
   }, 30);
 }
 
-// ==========================================
-// 2. 表單渲染核心邏輯
-// ==========================================
 function renderForm(response) {
   const data = response.data;
   document.getElementById('form-title').innerText = data.title;
@@ -71,6 +59,9 @@ function renderForm(response) {
   const isReceiver = (currentTaskStatus === '待學生回填' || currentTaskStatus === '待老師回填');
   const isStudentReturned = (!isStudentUser && currentTaskStatus === '老師暫存' && currentSavedAnswers['is_returned'] === 'true');
   
+  // 🌟 核心封存判定
+  const isCompleted = (currentTaskStatus === '已結案');
+  
   if (!timerStates['ass'].elapsed && currentSavedAnswers['time_assessment']) {
     timerStates['ass'].elapsed = parseTimeToSeconds(currentSavedAnswers['time_assessment']);
   }
@@ -78,7 +69,7 @@ function renderForm(response) {
     timerStates['fb'].elapsed = parseTimeToSeconds(currentSavedAnswers['time_feedback']);
   }
 
-  const needsAssLock = !isReceiver && !isStudentReturned && timerStates.ass.elapsed === 0 && !timerStates.ass.isRunning;
+  const needsAssLock = !isReceiver && !isStudentReturned && !isCompleted && timerStates.ass.elapsed === 0 && !timerStates.ass.isRunning;
 
   const todayObj = new Date();
   const defaultTodayStr = new Date(todayObj.getTime() - todayObj.getTimezoneOffset() * 60000).toISOString().split('T')[0];
@@ -86,7 +77,14 @@ function renderForm(response) {
 
   let html = `<p style="color: #666; margin-bottom: 20px;">${data.description}</p><form id="dynamic-exam-form">`;
 
-  if (isReceiver) {
+  // 頂部提示橫幅
+  if (isCompleted) {
+    html += `
+      <div style="background:#dcfce7; border-left:5px solid #166534; padding:15px; margin-bottom:20px; border-radius:4px;">
+        <h3 style="margin:0 0 10px 0; color:#14532d;">✅ 此紀錄已結案封存</h3>
+        <p style="margin:0; font-size:14px; color:#166534;">本考核表單已完成並封存，所有內容僅供檢視，無法再進行修改。</p>
+      </div>`;
+  } else if (isReceiver) {
     html += `
       <div style="background:#e0f2fe; border-left:5px solid #0284c7; padding:15px; margin-bottom:20px; border-radius:4px;">
         <h3 style="margin:0 0 10px 0; color:#0369a1;">📄 評核紀錄檢視</h3>
@@ -102,7 +100,7 @@ function renderForm(response) {
     html += `<div id="ass-lock-msg" class="question-block" style="background:#fff3cd; color:#856404; display:${needsAssLock ? 'block' : 'none'};">⚠️ 請先填寫「受評學員」與「身分」後，點選「▶ 評核開始」解鎖表單</div>`;
   }
 
-  const disableBasicInfo = (isReceiver || isStudentReturned) ? 'disabled="true"' : '';
+  const disableBasicInfo = (isReceiver || isStudentReturned || isCompleted) ? 'disabled="true"' : '';
 
   html += `
   <div style="display:flex; gap:15px; flex-wrap:wrap; margin-bottom: 20px;">
@@ -130,7 +128,7 @@ function renderForm(response) {
   </div>`;
 
   html += `<div class="floating-timer-panel"><h3 style="margin-top:0; color: var(--primary-color);">⏳ 第一階段：評核計時</h3>`;
-  if (isReceiver || isStudentReturned) {
+  if (isReceiver || isStudentReturned || isCompleted) {
     html += `<div style="margin-bottom:0; font-size:15px; color:#444;"><strong>評核花費時間：</strong> ${currentSavedAnswers['time_assessment'] || '無紀錄'}</div>`;
   } else {
     const assTimeStr = currentSavedAnswers['time_assessment'] || '';
@@ -167,11 +165,12 @@ function renderForm(response) {
       if (!isStudentUser && !q.targetRole.includes('教師')) canEdit = false;
     }
     const inputClass = canEdit ? 'teacher-input' : '';
-    const disableInput = !canEdit || (needsAssLock && canEdit);
+    // 🌟 若已結案，強制禁用所有輸入
+    const disableInput = !canEdit || (needsAssLock && canEdit) || isCompleted;
     const reqAttr = (q.required && canEdit && !disableInput) ? 'required' : '';
     const disabledAttr = disableInput ? 'disabled="true"' : ''; 
-    const bgStyle = !canEdit ? 'background-color: #f8fafc; border-left: 4px solid #94a3b8;' : '';
-    const badgeHtml = !canEdit ? '<span class="status-badge status-pending" style="margin-left:8px;">唯讀</span>' : '';
+    const bgStyle = (!canEdit || isCompleted) ? 'background-color: #f8fafc; border-left: 4px solid #94a3b8;' : '';
+    const badgeHtml = (!canEdit || isCompleted) ? '<span class="status-badge status-pending" style="margin-left:8px;">唯讀</span>' : '';
     
     let qHtml = `<div class="question-block" style="${bgStyle}"><h4>${q.question} ${badgeHtml}</h4>`;
     let savedVal = currentSavedAnswers[q.questionId] || "";
@@ -196,7 +195,7 @@ function renderForm(response) {
             <div style="font-size: 13px; color: #0284c7; margin-bottom: 4px; font-weight: bold;">🤖 系統整理摘要 (唯讀)：</div>
             <textarea name="${q.questionId}_ai" class="${inputClass}" readonly style="background-color: #f1f5f9; border: 1px dashed #cbd5e1; color: #475569; min-height: 80px;" ${disabledAttr}>${aiSavedVal}</textarea>
           </div>
-          <div style="font-size: 13px; color: #16a34a; margin-bottom: 4px; font-weight: bold;">✏️ 您的補充評語 (可手動修改儲存)：</div>
+          <div style="font-size: 13px; color: #16a34a; margin-bottom: 4px; font-weight: bold;">✏️ 您的補充評語 ${isCompleted ? '' : '(可手動修改儲存)'}：</div>
         `;
       }
       qHtml += `<textarea name="${q.questionId}" class="${inputClass}" ${reqAttr} ${disabledAttr}>${savedVal}</textarea>`;
@@ -213,7 +212,7 @@ function renderForm(response) {
 
   part1Questions.forEach(q => { html += generateQuestionHtml(q); });
 
-  if (!isEPA && part2Questions.length > 0 && !isReceiver && !isStudentReturned) {
+  if (!isEPA && part2Questions.length > 0 && !isReceiver && !isStudentReturned && !isCompleted) {
     const assTimeStr = currentSavedAnswers['time_assessment'] || '';
     const assMidBtnText = assTimeStr ? '▶ 接續評核計時' : '⏸️ 暫停評核計時';
     html += `
@@ -229,7 +228,7 @@ function renderForm(response) {
 
   if (!isEPA && part2Questions.length > 0) {
     html += `<div class="floating-timer-panel" style="margin-top: 40px; border: 2px solid var(--secondary-color);"><h3 style="margin-top:0; color: var(--secondary-color);">💬 第二階段：雙向回饋計時</h3>`;
-    if (isReceiver || isStudentReturned) {
+    if (isReceiver || isStudentReturned || isCompleted) {
       html += `<div style="margin-bottom:0; font-size:15px; color:#444;"><strong>雙向回饋時間：</strong> ${currentSavedAnswers['time_feedback'] || '無紀錄'}</div>`;
     } else {
       const fbTimeStr = currentSavedAnswers['time_feedback'] || '';
@@ -247,7 +246,7 @@ function renderForm(response) {
     }
     html += `</div>`;
 
-    if (isDOPS && !isStudentUser) {
+    if (isDOPS && !isStudentUser && !isCompleted) {
       html += `
       <div class="question-block" style="background: #f8fafc; border: 1px solid #e2e8f0; margin-top: 20px; padding: 15px;">
         <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
@@ -263,24 +262,33 @@ function renderForm(response) {
 
   part2Questions.forEach(q => { html += generateQuestionHtml(q); });
 
-  // 🌟 將簽名流程設為 EPA 與 DOPS 共通
+  // 🌟 簽名區塊 (已結案時轉為純圖片檢視)
   html += `<div class="question-block" style="margin-top: 30px;"><h3>✍️ 簽名區塊</h3><div style="display:flex; gap:20px; flex-wrap:wrap;">`;
-  if (isEPA || isDOPS) {
-    if (isStudentUser) {
-      const tSigImg = currentSavedAnswers.teacherSignature || '';
-      html += `<div><h4>老師簽名</h4><img src="${tSigImg}" style="max-width:260px; border:1px solid #ccc; background:#f8fafc;"></div>`;
-      html += `<div><h4>學生簽名</h4><canvas id="student-sig" class="sig-pad" width="260" height="150"></canvas><br><button type="button" class="btn-secondary" style="padding:4px 10px; margin-top:5px;" onclick="clearCanvas('student-sig')">清除重簽</button></div>`;
+  const tSig = currentSavedAnswers.teacherSignature || '';
+  const sSig = currentSavedAnswers.studentSignature || '';
+
+  if (isCompleted) {
+    html += `<div><h4>老師簽名</h4><img src="${tSig}" style="max-width:260px; border:1px solid #ccc; background:#f8fafc; min-height:80px; display:block;" alt="無簽名紀錄"></div>`;
+    html += `<div><h4>學生簽名</h4><img src="${sSig}" style="max-width:260px; border:1px solid #ccc; background:#f8fafc; min-height:80px; display:block;" alt="無簽名紀錄"></div>`;
+  } else {
+    if (isEPA || isDOPS) {
+      if (isStudentUser) {
+        html += `<div><h4>老師簽名</h4><img src="${tSig}" style="max-width:260px; border:1px solid #ccc; background:#f8fafc; min-height:80px; display:block;"></div>`;
+        html += `<div><h4>學生簽名</h4><canvas id="student-sig" class="sig-pad" width="260" height="150"></canvas><br><button type="button" class="btn-secondary" style="padding:4px 10px; margin-top:5px;" onclick="clearCanvas('student-sig')">清除重簽</button></div>`;
+      } else {
+        html += `<div><h4>老師簽名</h4><canvas id="teacher-sig" class="sig-pad" width="260" height="150"></canvas><br><button type="button" class="btn-secondary" style="padding:4px 10px; margin-top:5px;" onclick="clearCanvas('teacher-sig')">清除重簽</button></div>`;
+      }
     } else {
       html += `<div><h4>老師簽名</h4><canvas id="teacher-sig" class="sig-pad" width="260" height="150"></canvas><br><button type="button" class="btn-secondary" style="padding:4px 10px; margin-top:5px;" onclick="clearCanvas('teacher-sig')">清除重簽</button></div>`;
+      html += `<div><h4>學生簽名</h4><canvas id="student-sig" class="sig-pad" width="260" height="150"></canvas><br><button type="button" class="btn-secondary" style="padding:4px 10px; margin-top:5px;" onclick="clearCanvas('student-sig')">清除重簽</button></div>`;
     }
-  } else {
-    html += `<div><h4>老師簽名</h4><canvas id="teacher-sig" class="sig-pad" width="260" height="150"></canvas><br><button type="button" class="btn-secondary" style="padding:4px 10px; margin-top:5px;" onclick="clearCanvas('teacher-sig')">清除重簽</button></div>`;
-    html += `<div><h4>學生簽名</h4><canvas id="student-sig" class="sig-pad" width="260" height="150"></canvas><br><button type="button" class="btn-secondary" style="padding:4px 10px; margin-top:5px;" onclick="clearCanvas('student-sig')">清除重簽</button></div>`;
   }
   html += `</div></div>`;
 
-  // 🌟 將按鈕權限設為 EPA 與 DOPS 共通
-  if ((isEPA || isDOPS) && isStudentUser) {
+  // 🌟 若已結案，隱藏所有操作按鈕
+  if (isCompleted) {
+    html += `<div style="text-align:center; padding:15px; color:#166534; font-weight:bold; background:#dcfce7; border-radius:8px;">✅ 本考核已結案封存，無法進行修改。</div></form>`;
+  } else if ((isEPA || isDOPS) && isStudentUser) {
     html += `
       <div style="display: flex; gap: 15px;">
         <button type="button" id="btn-return" class="btn-secondary" style="flex:1; background-color:#ff9800; color:white; border:none;" onclick="submitExamHandler('return')">退回修改 (解鎖)</button>
@@ -299,23 +307,20 @@ function renderForm(response) {
 
   document.getElementById('questions-container').innerHTML = html;
   
-  setTimeout(() => { 
-    setupCanvas('teacher-sig'); 
-    setupCanvas('student-sig'); 
-    updateAttemptCount(); 
-  }, 100);
-  
-  autoSaveInterval = setInterval(saveLocalDraft, 3000);
+  if (!isCompleted) {
+    setTimeout(() => { 
+      setupCanvas('teacher-sig'); 
+      setupCanvas('student-sig'); 
+      updateAttemptCount(); 
+    }, 100);
+    autoSaveInterval = setInterval(saveLocalDraft, 3000);
+  }
 }
 
-// ==========================================
-// 3. 表單提交邏輯
-// ==========================================
 async function submitExamHandler(actionType) {
   const form = document.getElementById('dynamic-exam-form');
   const userRolesStr = [currentUser.role, currentUser.specialRole].filter(Boolean).join(' ');
   const isStudentUser = userRolesStr.includes('學生') || userRolesStr.includes('實習生');
-  
   const formTitle = document.getElementById('form-title').innerText.toUpperCase();
   const isEPA = formTitle.includes('EPA');
   const isDOPS = formTitle.includes('DOPS');
@@ -325,8 +330,6 @@ async function submitExamHandler(actionType) {
 
   if (actionType === 'submit') {
     if (!form.reportValidity()) return;
-    
-    // 🌟 將驗證防呆設為 EPA 與 DOPS 共通
     if (isEPA || isDOPS) {
       if (!isStudentUser && isCanvasBlank(canvases['teacher-sig'])) return alert("⚠️ 老師須完成簽名才能送出。");
       if (isStudentUser && isCanvasBlank(canvases['student-sig'])) return alert("⚠️ 學生須完成簽名才能送出結案。");
@@ -381,7 +384,7 @@ async function submitExamHandler(actionType) {
   if (res.status === 'success') {
     alert("🎉 " + res.message);
     localStorage.removeItem(`draft_${currentUser.empId}_${currentTemplateId}`);
-    backToDashboard(true); // 🌟 改成 true，送出後強制刷新任務列表
+    openPassport(true); 
   } else {
     alert("錯誤：" + res.message);
     submitBtn.disabled = false;
@@ -391,9 +394,6 @@ async function submitExamHandler(actionType) {
   }
 }
 
-// ==========================================
-// 4. 工具函式與計時器、畫布、摘要功能
-// ==========================================
 function updateAttemptCount() {
   const studentRaw = document.getElementById('native-student-input').value;
   const display = document.getElementById('attempt-count-display');
@@ -504,13 +504,10 @@ window.generateAndDraft = async function() {
   await submitExamHandler('draft'); 
 };
 
-// 🌟 智慧摘要：將所有備註 (note) 集中於待改進 (badText)
 window.generateAISummary = function(showAlert = true) {
   const form = document.getElementById('dynamic-exam-form');
   const formData = new FormData(form);
-  let goodText = "";
-  let badText = "";
-  let notAssessedText = "";
+  let goodText = ""; let badText = ""; let notAssessedText = "";
 
   window.currentQuestionsData.forEach(q => {
     if (q.isPart1 && q.type !== 'heading') {
@@ -542,8 +539,6 @@ window.generateAISummary = function(showAlert = true) {
           notAssessedText += `• ${cleanQuestion}\n`;
         } else {
           const isBad = /未符合|不|待|未完成/.test(ans) || ['1','2','3','4'].includes(ans); 
-          
-          // 只要有寫備註，就一定將備註與該題歸入「建議加強」區塊
           if (isBad || note.trim()) {
              let line = `• ${cleanQuestion}`;
              if (ans) line += `\n  👉 評比：${ans}`;
