@@ -29,6 +29,7 @@ async function handleLogin(mode) {
     document.getElementById('user-info-display').style.display = 'block'; 
     document.getElementById('hamburger-btn').style.display = 'block'; 
     
+    // 🌟 只需要保留最輕量的狀態快取即可
     globalHistoryCounts = res.historyCounts || {}; 
     globalTasks = res.tasks || [];
     
